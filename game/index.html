@@ -44,6 +44,32 @@
   </div>
 
   <!-- ===============================================
+       MODE SELECT OVERLAY
+       =============================================== -->
+  <div id="mode-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window mode-window">
+      <div class="mode-header">
+        <h2 class="mode-title">ring<span class="title-accent">0</span></h2>
+        <p class="mode-subtitle">select operation mode</p>
+      </div>
+      <div class="mode-cards">
+        <button id="mode-training" class="mode-card" type="button">
+          <span class="mode-card-icon">◈</span>
+          <h3>Training Mode</h3>
+          <p>10 kernel incident levels. Learn debugging, patching, and kernel internals step by step.</p>
+          <span class="mode-card-tag">LEARN</span>
+        </button>
+        <button id="mode-ctf" class="mode-card mode-card-ctf" type="button">
+          <span class="mode-card-icon">⚑</span>
+          <h3>CTF Mode</h3>
+          <p>5 timed capture-the-flag challenges. Find flags, decode secrets, race against the clock.</p>
+          <span class="mode-card-tag tag-ctf">COMPETE</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===============================================
        KERNEL PANIC OVERLAY
        =============================================== -->
   <div id="panic-overlay" class="panic-overlay hidden">
@@ -128,7 +154,7 @@
     <header class="title-panel">
       <div class="title-left">
         <h1 class="game-title">ring<span class="title-accent">0</span></h1>
-        <p class="game-subtitle">kernel incident training ground</p>
+        <p class="game-subtitle" id="game-subtitle">kernel incident training ground</p>
       </div>
       <div class="header-right">
         <nav class="header-stats" aria-label="Game statistics">
@@ -140,6 +166,12 @@
           </div>
           <div class="stat-badge" id="hud-attempts">
             <span class="stat-icon">⟳</span> Attempts: 0
+          </div>
+          <div class="stat-badge stat-timer hidden" id="hud-timer">
+            <span class="stat-icon">⏱</span> <span id="timer-display">03:00</span>
+          </div>
+          <div class="stat-badge stat-flags hidden" id="hud-flags">
+            <span class="stat-icon">⚑</span> Flags: <span id="flags-display">0/5</span>
           </div>
         </nav>
         <!-- Hamburger Menu Button (Moved into Header) -->
@@ -252,6 +284,98 @@
     </div>
 
   </main>
+
+  <!-- ===============================================
+       CTF FLAG CAPTURE OVERLAY
+       =============================================== -->
+  <div id="flag-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window terminal-window flag-window">
+      <div class="terminal-header">
+        <span class="terminal-dot dot-red"></span>
+        <span class="terminal-dot dot-yellow"></span>
+        <span class="terminal-dot dot-green"></span>
+        <span class="terminal-header-text" id="flag-title">FLAG CAPTURED</span>
+      </div>
+      <div class="flag-display">
+        <p class="flag-label">Flag found:</p>
+        <pre id="flag-value" class="flag-value-box"></pre>
+      </div>
+      <p id="flag-bonus" class="flag-bonus-text"></p>
+      <div class="dialog-actions">
+        <button id="flag-continue" type="button" class="btn-primary">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===============================================
+       CTF DECODE TERMINAL OVERLAY
+       =============================================== -->
+  <div id="decode-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window terminal-window">
+      <div class="terminal-header">
+        <span class="terminal-dot dot-red"></span>
+        <span class="terminal-dot dot-yellow"></span>
+        <span class="terminal-dot dot-green"></span>
+        <span class="terminal-header-text" id="decode-title">DECODE TERMINAL</span>
+      </div>
+      <p id="decode-text" class="terminal-question"></p>
+      <pre id="decode-code" class="terminal-code-block"></pre>
+      <div class="terminal-input-row">
+        <span class="terminal-prompt">$</span>
+        <input id="decode-input" type="text" autocomplete="off" spellcheck="false" placeholder="type your answer..." />
+      </div>
+      <p id="decode-feedback" class="terminal-feedback"></p>
+      <div class="dialog-actions">
+        <button id="decode-submit" type="button" class="btn-primary">Submit</button>
+        <button id="decode-close" type="button" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===============================================
+       CTF SCOREBOARD OVERLAY
+       =============================================== -->
+  <div id="ctf-scoreboard-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window ctf-score-window">
+      <div class="ctf-score-badge">⚑</div>
+      <h3 class="ctf-score-title" id="ctf-score-title">CTF COMPLETE</h3>
+      <div class="ctf-score-stats">
+        <div class="lc-stat">
+          <span class="lc-stat-value" id="ctf-total-flags" style="color:#ff6d7f">0</span>
+          <span class="lc-stat-label">FLAGS CAPTURED</span>
+        </div>
+        <div class="lc-stat">
+          <span class="lc-stat-value lc-xp-color" id="ctf-total-xp">0</span>
+          <span class="lc-stat-label">TOTAL XP</span>
+        </div>
+        <div class="lc-stat">
+          <span class="lc-stat-value lc-total-color" id="ctf-total-time">00:00</span>
+          <span class="lc-stat-label">TOTAL TIME</span>
+        </div>
+      </div>
+      <div class="ctf-flags-list" id="ctf-flags-list"></div>
+      <p id="ctf-score-rank" class="ctf-rank-text"></p>
+      <div class="dialog-actions lc-actions">
+        <button id="ctf-score-close" type="button" class="btn-primary">Back to Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===============================================
+       CTF TIME UP OVERLAY
+       =============================================== -->
+  <div id="ctf-timeup-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window lc-window">
+      <div class="lc-badge" style="color:var(--warn)">⏱</div>
+      <h3 class="lc-title" style="color:var(--warn)">TIME IS UP</h3>
+      <p class="lc-level-name" id="ctf-timeup-level"></p>
+      <p class="lc-next-info">The clock ran out. Try again or move to the next challenge.</p>
+      <div class="dialog-actions lc-actions">
+        <button id="ctf-timeup-retry" type="button" class="btn-primary">Retry Level</button>
+        <button id="ctf-timeup-skip" type="button" class="btn-secondary">Skip</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ===============================================
        DIALOG OVERLAYS
