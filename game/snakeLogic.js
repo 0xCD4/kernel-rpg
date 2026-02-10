@@ -1052,6 +1052,384 @@ const CTF_LEVELS = [
       '###########################',
     ],
   },
+  /* ===============================================
+     CTF 6: Dirty Pipe — Data Exfiltration
+     Real-world: CVE-2022-0847
+     Difficulty: 2/5
+     =============================================== */
+  {
+    id: 6,
+    title: 'CTF-06: Dirty Pipe [CVE-2022-0847]',
+    incident: 'Unprivileged process overwrites read-only files via stale pipe buffer flags.',
+    trace: 'WARNING: pipe_write: page cache overwrite from unprivileged context\nBUG: stale PIPE_BUF_FLAG_CAN_MERGE in copy_page_to_iter_pipe+0x38',
+    flag: 'flag{d1rty_p1pe_pag3_cach3}',
+    timeLimit: 200,
+    difficulty: 2,
+    mentorText:
+      'Stage 6: Data Exfiltration. The attacker is rewriting sensitive files without write permission. ' +
+      'This is CVE-2022-0847, "Dirty Pipe" -- discovered by Max Kellermann in February 2022 ' +
+      'while debugging corrupted gzip access logs from a customer support ticket. ' +
+      'The bug is deceptively simple: when a new pipe_buffer is allocated in copy_page_to_iter_pipe() ' +
+      'and push_pipe(), the "flags" field is never initialized to zero. ' +
+      'The attack: (1) fill a pipe with write() calls -- this sets PIPE_BUF_FLAG_CAN_MERGE on every buffer, ' +
+      '(2) drain the pipe -- the stale flags remain on the ring entries, ' +
+      '(3) splice() a read-only file\'s page into the pipe -- the page cache entry inherits the stale CAN_MERGE flag, ' +
+      '(4) write() to the pipe -- the kernel sees CAN_MERGE and merges your data directly into the file\'s page cache! ' +
+      'It even works on immutable files and CD-ROM mounts. The fix is literally one line: buf->flags = 0. ' +
+      'A single uninitialized struct member caused one of the most impactful Linux vulns in years. ' +
+      'Often compared to Dirty COW, but far easier to exploit -- no race condition needed!',
+    lesson: [
+      'CVE-2022-0847 (Dirty Pipe): overwrites ANY read-only file without permissions.',
+      'pipe_buffer.flags must be initialized -- stale PIPE_BUF_FLAG_CAN_MERGE is the root cause.',
+      'splice() shares pages by reference (zero-copy) between files and pipes.',
+      'One uninitialized struct member = full system compromise. Always init your structs.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Dirty Pipe Root Cause',
+      question: 'splice() shares file data with pipes using zero-copy page references. What kernel subsystem stores file contents in memory and gets corrupted by this bug?',
+      code: '/* lib/iov_iter.c - VULNERABLE */\nstatic size_t copy_page_to_iter_pipe(\n    struct page *page, size_t offset,\n    size_t bytes, struct iov_iter *i)\n{\n    struct pipe_buffer *buf;\n    buf = pipe_head_buf(pipe);\n    buf->ops = &page_cache_pipe_buf_ops;\n    /* BUG: buf->flags NOT initialized! */\n    /* Stale CAN_MERGE from prior write() */\n    /* splice() page cache entry gets the */\n    /* stale flag => write() corrupts it! */\n    get_page(page);\n    buf->page = page;\n}',
+      answers: ['page cache', 'pagecache', 'page_cache'],
+      hint: 'The kernel caches file contents in memory so they can be read without disk I/O. splice() inserts a reference to this cache into the pipe.',
+      xp: 100,
+    },
+    patch: {
+      title: 'Patch: Initialize Pipe Buffer [lib/iov_iter.c]',
+      question: 'Which pipe_buffer struct member must be initialized to zero to prevent the stale CAN_MERGE flag from persisting?',
+      code: '/* lib/iov_iter.c - PATCHED */\nstatic size_t copy_page_to_iter_pipe(\n    struct page *page, size_t offset,\n    size_t bytes, struct iov_iter *i)\n{\n    struct pipe_buffer *buf;\n    buf = pipe_head_buf(pipe);\n    buf->ops = &page_cache_pipe_buf_ops;\n    buf->___ = 0; /* FIX: clear stale flags */\n    get_page(page);\n    buf->page = page;\n}',
+      answers: ['flags'],
+      hint: 'The struct member that contains PIPE_BUF_FLAG_CAN_MERGE. Starts with "f".',
+      xp: 200,
+      attempts: 3,
+    },
+    concepts: ['PIPE_BUF_FLAG_CAN_MERGE', 'page cache', 'splice()', 'CVE-2022-0847'],
+    maze: [
+      '###########################',
+      '#M........#...............#',
+      '#.........#...............#',
+      '#..####...#...####........#',
+      '#..#..........#...........#',
+      '#..#..........#...........#',
+      '#..#...####...#...####....#',
+      '#......#......#...#...D...#',
+      '#......#......#...#.......#',
+      '#..#####..........#..###..#',
+      '#..........#..............#',
+      '#..........#......K.......#',
+      '#..####....#..............#',
+      '#..#.......#....####..##..#',
+      '#..#.......#....#.........#',
+      '#..#...........P#.........#',
+      '#..####..####..#..........#',
+      '#..........#...####..####.#',
+      '#..........#............G.#',
+      '#..####....#..............#',
+      '#..........#.....B....#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 7: nf_tables Double-Free — Firewall Subversion
+     Real-world: CVE-2024-1086
+     Difficulty: 3/5
+     =============================================== */
+  {
+    id: 7,
+    title: 'CTF-07: Double-Free [CVE-2024-1086]',
+    incident: 'nf_tables verdict confusion causes skb double-free, allowing arbitrary kernel write.',
+    trace: 'BUG: KASAN: double-free in nf_hook_slow+0x1a4/0x250 [nf_tables]\nWARNING: NF_DROP verdict with positive errno interpreted as NF_ACCEPT',
+    flag: 'flag{nft_v3rd1ct_d0ubl3_fr33}',
+    timeLimit: 240,
+    difficulty: 3,
+    mentorText:
+      'Stage 7: Firewall Subversion. The attacker manipulates the packet filtering engine itself. ' +
+      'This is CVE-2024-1086, codenamed "Flipping Pages" -- a critical nf_tables vulnerability ' +
+      'that lurked for nearly a DECADE (since February 2014!) before being found. ' +
+      'The researcher "Notselwyn" published an exploit in March 2024 with a 99.4% success rate ' +
+      'that works across kernels v5.14 to v6.6 without recompilation. ' +
+      'The bug: nft_verdict_init() applies NF_VERDICT_MASK to verdict codes in the default case. ' +
+      'An attacker crafts an NF_DROP verdict with a positive errno value that, after masking, ' +
+      'looks like NF_ACCEPT (value 1). The packet\'s skb is freed by the NF_DROP path, ' +
+      'then ALSO processed by the NF_ACCEPT path -- a classic double-free. ' +
+      'CISA added this to their Known Exploited Vulnerabilities catalog. ' +
+      'Google kCTF bounties for such exploits range from $31,337 to $133,337! ' +
+      'The fix: reject verdict parameters for NF_DROP and NF_QUEUE entirely.',
+    lesson: [
+      'CVE-2024-1086: nf_tables verdict confusion, 10-year-old bug, 99.4% exploit success rate.',
+      'NF_VERDICT_MASK on user input can transform NF_DROP into NF_ACCEPT.',
+      'Double-free: skb freed by DROP path, then used again by ACCEPT path.',
+      'Fix: strict input validation -- reject unexpected verdict parameters with -EINVAL.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Verdict Confusion',
+      question: 'An NF_DROP verdict frees the skb, but a positive errno makes it also get processed as NF_ACCEPT. What bug class results from the same object being freed twice?',
+      code: '/* net/netfilter/nf_tables_api.c - VULNERABLE */\nstatic int nft_verdict_init(const struct nft_ctx *ctx,\n    struct nft_data *data, ...)\n{\n    /* ... */\n    default:\n        switch (data->verdict.code & NF_VERDICT_MASK) {\n        case NF_ACCEPT: /* BUG: NF_DROP with positive\n             errno 1 gets masked to NF_ACCEPT! */\n        case NF_DROP:\n        case NF_QUEUE:\n            break;\n        }\n}\n/* Result: skb freed by DROP, then used by ACCEPT */\n/* => double-free in nf_hook_slow() */  ',
+      answers: ['double free', 'double-free', 'doublefree'],
+      hint: 'The skb is freed once by the DROP handler, and freed again when processed as ACCEPT. Same memory freed two times...',
+      xp: 130,
+    },
+    patch: {
+      title: 'Patch: Strict Verdict Validation [net/netfilter/nf_tables_api.c]',
+      question: 'Complete the return value that rejects invalid verdict parameters before they can cause confusion.',
+      code: '/* net/netfilter/nf_tables_api.c - PATCHED */\nstatic int nft_verdict_init(...)\n{\n    switch (data->verdict.code) {\n    case NF_ACCEPT:\n    case NF_DROP:\n    case NF_QUEUE:\n        /* FIX: reject any parameters */\n        if (desc->len != 0)\n            return ___;\n        break;\n    case NFT_CONTINUE:\n    case NFT_BREAK:\n    case NFT_RETURN:\n        break;\n    default:\n        return -EINVAL;\n    }\n}',
+      answers: ['-EINVAL', 'EINVAL'],
+      hint: 'The kernel error code for "Invalid argument". Negative of EINVAL.',
+      xp: 300,
+      attempts: 2,
+    },
+    concepts: ['NF_VERDICT_MASK', 'double-free', 'nf_tables', 'CVE-2024-1086'],
+    maze: [
+      '###########################',
+      '#M.......#................#',
+      '#........#................#',
+      '#..####..#.....####..##...#',
+      '#..#...........#..........#',
+      '#..#...........#..........#',
+      '#..####..####..#...####...#',
+      '#........#.....#...#..D...#',
+      '#........#.....#...#......#',
+      '#..####..#.........#..###.#',
+      '#..#.....#...#............#',
+      '#..#.....#...#....K.......#',
+      '#..#.....#...#............#',
+      '#..####......####..####...#',
+      '#............#............#',
+      '#..####..#...#.....P......#',
+      '#..#.....#...#............#',
+      '#..#.....#...####..####...#',
+      '#..####..#...........#..G.#',
+      '#........#...............B#',
+      '#........#............#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 8: StackRot — Memory Corruption
+     Real-world: CVE-2023-3269
+     Difficulty: 4/5
+     =============================================== */
+  {
+    id: 8,
+    title: 'CTF-08: StackRot [CVE-2023-3269]',
+    incident: 'Use-after-free-by-RCU in maple tree during stack VMA expansion.',
+    trace: 'BUG: KASAN: use-after-free in mas_walk+0x178/0x350 [mm]\nWARNING: expand_downwards: maple tree node freed under RCU while mm read-locked',
+    flag: 'flag{st4ckr0t_mmap_wr1t3_l0ck}',
+    timeLimit: 270,
+    difficulty: 4,
+    mentorText:
+      'Stage 8: Memory Corruption. The attacker exploits a race in the memory manager itself. ' +
+      'This is CVE-2023-3269, "StackRot" -- discovered by Ruihan Li at Peking University in June 2023. ' +
+      'In Linux 6.1, VMA (Virtual Memory Area) management was migrated from red-black trees to ' +
+      'maple trees -- an RCU-safe B-tree data structure. But the locking was not updated to match! ' +
+      'When a process accesses below its stack (MAP_GROWSDOWN), the kernel calls expand_downwards() ' +
+      'to grow the stack VMA. This modifies the maple tree, potentially replacing nodes. ' +
+      'Old nodes are freed via RCU callbacks. The critical bug: VMA access only holds the mm READ lock, ' +
+      'not a WRITE lock. RCU callbacks can fire at any time, freeing the old maple node ' +
+      'while other threads still have pointers to it. This is a use-after-free-by-RCU. ' +
+      'Linus Torvalds personally led the two-week fix effort. His solution: upgrade to mmap_write_lock ' +
+      'when stack expansion is needed. This was the first proof that UAFBR bugs are exploitable!',
+    lesson: [
+      'CVE-2023-3269 (StackRot): first proven use-after-free-by-RCU exploit.',
+      'Maple trees replaced red-black trees for VMA management in Linux 6.1.',
+      'expand_downwards() modifies the tree, so a READ lock is insufficient.',
+      'Fix: use mmap_write_lock when stack expansion is needed.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Lock Semantics Mismatch',
+      question: 'expand_downwards() modifies the maple tree under the mm read lock. RCU frees old nodes while readers hold stale pointers. What lock type should be held instead?',
+      code: '/* mm/mmap.c + arch/x86/mm/fault.c - VULNERABLE */\nstatic void __do_page_fault(\n    struct pt_regs *regs, unsigned long addr)\n{\n    struct mm_struct *mm = current->mm;\n    /* BUG: only holds READ lock */\n    mmap_read_lock(mm);\n    vma = find_vma(mm, addr);\n    if (vma->vm_flags & VM_GROWSDOWN) {\n        /* expand_downwards modifies maple tree!\n           Old nodes freed via RCU callback.\n           Other readers see stale pointers => UAF */\n        expand_stack(vma, addr);\n    }\n    mmap_read_unlock(mm);\n}',
+      answers: ['write lock', 'write', 'mmap_write_lock', 'write_lock'],
+      hint: 'If a function modifies a data structure, readers are not enough. You need exclusive access.',
+      xp: 160,
+    },
+    patch: {
+      title: 'Patch: Write Lock for Stack Expansion [mm/memory.c]',
+      question: 'Complete the lock function that provides exclusive access to the mm before expanding the stack.',
+      code: '/* mm/memory.c - PATCHED (Linus Torvalds) */\nstruct vm_area_struct *lock_mm_and_find_vma(\n    struct mm_struct *mm, unsigned long addr,\n    struct pt_regs *regs)\n{\n    struct vm_area_struct *vma;\n    /* FIX: upgrade to exclusive lock */\n    ___(mm);\n    vma = find_vma(mm, addr);\n    if (vma && (vma->vm_flags & VM_GROWSDOWN))\n        expand_stack(vma, addr);\n    return vma;\n}',
+      answers: ['mmap_write_lock'],
+      hint: 'The mm locking function that provides exclusive (write) access. mmap_???_lock.',
+      xp: 400,
+      attempts: 2,
+    },
+    concepts: ['RCU', 'maple tree', 'mmap_write_lock', 'CVE-2023-3269'],
+    maze: [
+      '###########################',
+      '#M.........#..............#',
+      '#..........#..............#',
+      '#..####....#...####.......#',
+      '#.....#....#...#..........#',
+      '#.....#........#..........#',
+      '#..####..####..#...####...#',
+      '#........#.....#...#......#',
+      '#........#...D.#...#......#',
+      '#..####..#.........#..###.#',
+      '#..#.........#............#',
+      '#..#.........#......K.....#',
+      '#..#..####...#............#',
+      '#..#.........#...####.....#',
+      '#............#...#........#',
+      '#..####..#...#...#..P.....#',
+      '#..#.....#...#...#........#',
+      '#..#.....#...####.#..####.#',
+      '#..####..#...........#..G.#',
+      '#........#...............B#',
+      '#........#............#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 9: io_uring OOB — Async I/O Weaponization
+     Real-world: CVE-2023-2598
+     Difficulty: 4/5
+     =============================================== */
+  {
+    id: 9,
+    title: 'CTF-09: io_uring OOB [CVE-2023-2598]',
+    incident: 'Buffer registration coalesce optimization allows out-of-bounds physical memory access.',
+    trace: 'BUG: io_uring: bvec length exceeds actual physical pages\nWARNING: io_sqe_buffer_register: coalesced N pages from same folio but only 1 physical page',
+    flag: 'flag{10_ur1ng_pag3_fr4m3_0ob}',
+    timeLimit: 300,
+    difficulty: 4,
+    mentorText:
+      'Stage 9: Async I/O Weaponization. The attacker uses io_uring for kernel memory access. ' +
+      'This is CVE-2023-2598 -- an out-of-bounds physical memory access in io_uring buffer registration. ' +
+      'Google reported that io_uring accounted for 60% of ALL kernel exploit submissions to their kCTF program, ' +
+      'resulting in approximately $1 million in total bounty payouts. They disabled io_uring in ChromeOS and Android! ' +
+      'The bug: io_sqe_buffer_register() has a coalesce optimization -- if multiple user pages ' +
+      'belong to the same folio (e.g. huge pages), they are merged into a single bvec entry. ' +
+      'But the check only verifies page_folio(pages[i]) == folio, NOT that pages are physically consecutive. ' +
+      'An attacker maps the SAME physical page N times via MAP_FIXED on a memfd. The kernel sees N pages ' +
+      'from one folio, creates bvec with size N*PAGE_SIZE, but actual physical memory is only 1 page. ' +
+      'IORING_OP_READ_FIXED then reads N-1 pages beyond the physical buffer -- arbitrary kernel memory read. ' +
+      'The fix: verify pages are physically sequential by comparing their Physical Frame Numbers.',
+    lesson: [
+      'CVE-2023-2598: io_uring OOB, part of $1M in io_uring bounties at Google.',
+      'Folio coalescing assumed consecutive pages, but attacker mapped same page N times.',
+      'page_to_pfn() converts struct page to its Physical Frame Number for contiguity checks.',
+      'Optimization shortcuts in hot paths can create critical security holes.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Phantom Pages',
+      question: 'An attacker maps the same physical page to N virtual addresses. The kernel sees N pages from one folio and creates a bvec of N*PAGE_SIZE. But actual memory is 1 page. What kind of access does this enable?',
+      code: '/* io_uring/rsrc.c - VULNERABLE */\nstatic int io_sqe_buffer_register(...)\n{\n    nr_pages = get_user_pages(ubuf, ...);\n    folio = page_folio(pages[0]);\n    for (i = 0; i < nr_pages; i++) {\n        /* BUG: only checks same folio,\n           NOT physical contiguity! */\n        if (page_folio(pages[i]) != folio)\n            break; /* stop coalescing */\n    }\n    /* Creates bvec with len = i * PAGE_SIZE\n       but physical memory may be just 1 page!\n       IORING_OP_READ_FIXED reads beyond it */\n    bvec_set_page(&imu->bvec[0], pages[0],\n        i * PAGE_SIZE, 0);\n}',
+      answers: ['out of bounds', 'out-of-bounds', 'oob', 'buffer overflow'],
+      hint: 'The bvec says N pages but real memory is 1 page. Reading past the actual buffer boundary is called...',
+      xp: 160,
+    },
+    patch: {
+      title: 'Patch: Physical Contiguity Check [io_uring/rsrc.c]',
+      question: 'Complete the function that converts a struct page to its Physical Frame Number, enabling the contiguity check.',
+      code: '/* io_uring/rsrc.c - PATCHED */\nstatic int io_sqe_buffer_register(...)\n{\n    nr_pages = get_user_pages(ubuf, ...);\n    folio = page_folio(pages[0]);\n    for (i = 1; i < nr_pages; i++) {\n        if (page_folio(pages[i]) != folio ||\n            /* FIX: verify physical contiguity */\n            ___(pages[i]) !=\n            page_to_pfn(pages[i-1]) + 1)\n            break;\n    }\n    bvec_set_page(&imu->bvec[0], pages[0],\n        i * PAGE_SIZE, 0);\n}',
+      answers: ['page_to_pfn'],
+      hint: 'Converts a struct page pointer to its Physical Frame Number. page_to_???.',
+      xp: 400,
+      attempts: 2,
+    },
+    concepts: ['page_to_pfn', 'folio', 'io_uring', 'CVE-2023-2598'],
+    maze: [
+      '###########################',
+      '#M........#...............#',
+      '#.........#...............#',
+      '#..####...#....####..###..#',
+      '#.....#........#..........#',
+      '#.....#........#..........#',
+      '#..####..####..#..####....#',
+      '#........#..D..#..#.......#',
+      '#........#.....#..#.......#',
+      '#..####..#.....#..#..####.#',
+      '#..#.....#..#..#..........#',
+      '#..#..K..#..#..#..........#',
+      '#..#.....#..#..#..####....#',
+      '#..####..#..#.....#.......#',
+      '#........#..#.....#.......#',
+      '#..####..#..#..####..###..#',
+      '#........#.........P......#',
+      '#........#................#',
+      '#..####..####..####..####.#',
+      '#..............#.......G..#',
+      '#.........B....#.......E..#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 10: nf_tables Anonymous Set UAF — Evidence Destruction
+     Real-world: CVE-2023-32233
+     Difficulty: 5/5
+     =============================================== */
+  {
+    id: 10,
+    title: 'CTF-10: nf_tables UAF [CVE-2023-32233]',
+    incident: 'nf_tables batch transaction allows use-after-free on implicitly deleted anonymous sets.',
+    trace: 'BUG: KASAN: use-after-free in nft_set_lookup_global+0x50/0xb0 [nf_tables]\nWARNING: anonymous set accessed after implicit deletion in same batch',
+    flag: 'flag{nft_an0n_s3t_batch_uaf}',
+    timeLimit: 300,
+    difficulty: 5,
+    mentorText:
+      'Final stage: Evidence Destruction. The attacker manipulates nf_tables transactions to cover tracks. ' +
+      'This is CVE-2023-32233 -- a use-after-free in nf_tables batch transaction processing. ' +
+      'Discovered by Patryk Sondej and Piotr Krysiuk, disclosed May 2023. ' +
+      'nf_tables supports atomic batch updates -- multiple operations grouped into one transaction. ' +
+      'The bug: when NFT_MSG_DELRULE is processed, it implicitly deletes any anonymous sets ' +
+      'referenced by the rule\'s expressions. But nf_tables_deactivate_set() does NOT mark ' +
+      'the anonymous set as inactive in the next generation! ' +
+      'A subsequent operation in the SAME batch (like NFT_MSG_DELSETELEM) can still reference ' +
+      'the already-freed anonymous set -- a use-after-free. ' +
+      'Google demonstrated exploitation even with KASLR, hardened SLAB, and Control-Flow Integrity. ' +
+      'The fix by Pablo Neira Ayuso (nf_tables maintainer): check the NFT_SET_ANONYMOUS flag ' +
+      'and deactivate the set during the preparation phase, making it invisible to later batch ops. ' +
+      'Congratulations operator -- this is the hardest challenge. Fix the transaction logic!',
+    lesson: [
+      'CVE-2023-32233: nf_tables anonymous set UAF via batch processing.',
+      'Implicit deletion must propagate state to prevent later batch operations from accessing freed objects.',
+      'NFT_SET_ANONYMOUS flag identifies sets that are bound to a single rule\'s lifetime.',
+      'Generation-based concurrency: objects must be deactivated in the correct generation.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Batch Transaction UAF',
+      question: 'NFT_MSG_DELRULE frees anonymous sets but does not mark them inactive. A later operation in the same batch accesses the freed set. What vulnerability class is this?',
+      code: '/* net/netfilter/nf_tables_api.c - VULNERABLE */\n/* Batch: [ DELRULE(rule_with_anon_set),\n           DELSETELEM(same_anon_set) ] */\n\nstatic void nf_tables_deactivate_set(\n    const struct nft_ctx *ctx,\n    struct nft_set *set, ...)\n{\n    /* BUG: anonymous set NOT deactivated!\n       It remains visible in current generation.\n       DELSETELEM in same batch finds it,\n       but memory was already scheduled for free\n       by nf_tables_commit_release() */\n    set->use--;\n}',
+      answers: ['use after free', 'use-after-free', 'uaf'],
+      hint: 'The anonymous set is freed by DELRULE, then accessed again by DELSETELEM. Accessing memory after it has been freed...',
+      xp: 200,
+    },
+    patch: {
+      title: 'Patch: Deactivate Anonymous Sets [net/netfilter/nf_tables_api.c]',
+      question: 'Complete the flag that identifies anonymous sets so they can be deactivated during the preparation phase.',
+      code: '/* net/netfilter/nf_tables_api.c - PATCHED */\n/* Fix by Pablo Neira Ayuso (nf_tables maintainer) */\nstatic void nf_tables_deactivate_set(\n    const struct nft_ctx *ctx,\n    struct nft_set *set,\n    struct nft_set_binding *binding,\n    enum nft_trans_phase phase)\n{\n    /* FIX: toggle anonymous sets as inactive\n       so later batch ops cannot reference them */\n    if (set->flags & ___)\n        nft_deactivate_next(ctx->net, set);\n    set->use--;\n}',
+      answers: ['NFT_SET_ANONYMOUS'],
+      hint: 'The nft_set flag constant that marks a set as anonymous (bound to a single rule). NFT_SET_???.',
+      xp: 500,
+      attempts: 2,
+    },
+    concepts: ['NFT_SET_ANONYMOUS', 'batch transactions', 'nf_tables', 'CVE-2023-32233'],
+    maze: [
+      '###########################',
+      '#M.......#................#',
+      '#........#................#',
+      '#..####..#....####..####..#',
+      '#..#..........#.......#...#',
+      '#..#..........#.......#...#',
+      '#..#...####...#..####.#...#',
+      '#......#......#......D#...#',
+      '#......#......#..........##',
+      '#..#####......####..####..#',
+      '#..........#..............#',
+      '#..........#......K.......#',
+      '#..####....#..............#',
+      '#..#.......#...####..###..#',
+      '#..#.......#...#..........#',
+      '#..#...........#..P.......#',
+      '#..####..####..#..........#',
+      '#..........#...####..####.#',
+      '#..........#.............G#',
+      '#..####....#..............#',
+      '#..........#......B...#.E.#',
+      '###########################',
+    ],
+  },
 ];
 
 function buildLevelMap(level) {
