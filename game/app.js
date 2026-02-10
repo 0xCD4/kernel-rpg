@@ -1580,9 +1580,17 @@ function showModeSelect() {
   modeOverlay.classList.remove('hidden');
 }
 
+const trainingInstrOverlay = document.getElementById('training-instructions-overlay');
+const trainingInstrStart = document.getElementById('training-instr-start');
+
 modeTraining.addEventListener('click', () => {
-  state.gameMode = 'training';
   modeOverlay.classList.add('hidden');
+  trainingInstrOverlay.classList.remove('hidden');
+});
+
+trainingInstrStart.addEventListener('click', () => {
+  trainingInstrOverlay.classList.add('hidden');
+  state.gameMode = 'training';
   gameRoot.classList.remove('hidden');
   gameSubtitle.textContent = 'kernel incident training ground';
   hudTimer.classList.add('hidden');

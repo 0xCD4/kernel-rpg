@@ -289,6 +289,54 @@
   </main>
 
   <!-- ===============================================
+       TRAINING INSTRUCTIONS OVERLAY
+       =============================================== -->
+  <div id="training-instructions-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window ctf-instructions-window training-instructions-window">
+      <div class="ctf-instr-header training-instr-header">
+        <span class="ctf-instr-icon training-instr-icon">&#x2B21;</span>
+        <h3>Kernel Incident Training</h3>
+      </div>
+      <div class="ctf-instr-body">
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num training-num">1</span>
+          <div>
+            <strong>Get the Incident Briefing</strong>
+            <p>Walk to the <span class="ctf-hl mentor">Mentor (M)</span> and press <kbd>E</kbd> to learn about the kernel incident.</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num training-num">2</span>
+          <div>
+            <strong>Diagnose the Root Cause</strong>
+            <p>Go to the <span class="ctf-hl diag">Diagnosis Terminal (D)</span> and identify the root cause of the problem.</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num training-num">3</span>
+          <div>
+            <strong>Patch the Kernel Code</strong>
+            <p>Walk to the <span class="ctf-hl flag">Patch Terminal (P)</span> and write the fix. Get it right to earn XP!</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num training-num">4</span>
+          <div>
+            <strong>Learn &amp; Advance</strong>
+            <p>Visit <span class="ctf-hl gate">Concept (K)</span> nodes, then find the <span class="ctf-hl gate">Gate (G)</span> to proceed to the next level.</p>
+          </div>
+        </div>
+      </div>
+      <div class="ctf-instr-controls">
+        <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move &nbsp; <kbd>E</kbd> Interact &nbsp; <kbd>H</kbd> Hint &nbsp; <kbd>R</kbd> Reset</p>
+      </div>
+      <div class="dialog-actions lc-actions">
+        <button id="training-instr-start" type="button" class="btn-primary">Start Training</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===============================================
        CTF INSTRUCTIONS OVERLAY
        =============================================== -->
   <div id="ctf-instructions-overlay" class="dialog-overlay hidden">

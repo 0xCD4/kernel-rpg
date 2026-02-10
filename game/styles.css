@@ -2149,6 +2149,19 @@ kbd {
   font-weight: 600;
 }
 
+/* Training instructions accent overrides (cyan instead of red) */
+.training-instr-header {
+  border-bottom-color: rgba(101, 212, 255, 0.2);
+}
+.training-instr-icon {
+  color: var(--accent) !important;
+}
+.training-num {
+  background: rgba(101, 212, 255, 0.12);
+  border-color: rgba(101, 212, 255, 0.3);
+  color: var(--accent);
+}
+
 @media (max-width: 600px) {
   .mode-cards {
     grid-template-columns: 1fr;
