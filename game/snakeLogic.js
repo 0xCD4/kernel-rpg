@@ -673,111 +673,117 @@ const LEVELS = [
 
 /* ═══════════════════════════════════════════════
    CTF MODE - CAPTURE THE FLAG LEVELS
+   Fix the kernel code to earn the flag.
+   Same tiles as training: M D P K G E B
    ═══════════════════════════════════════════════ */
-
-const CTF_TILE = {
-  ...TILE,
-  FLAG: 9,
-  DECRYPT: 10,
-  FIREWALL: 11,
-};
-
-const CTF_CHAR_TO_TILE = {
-  ...CHAR_TO_TILE,
-  F: CTF_TILE.FLAG,
-  X: CTF_TILE.DECRYPT,
-  W: CTF_TILE.FIREWALL,
-};
 
 const CTF_LEVELS = [
   /* ===============================================
-     CTF 1: Memory Forensics
+     CTF 1: Buffer Overflow Patch (Easy)
+     Difficulty: 1/5 - Single function fill-in
      =============================================== */
   {
     id: 1,
-    title: 'CTF-01: Memory Forensics',
-    briefing: 'A compromised server has been captured for analysis. Extract the flag hidden in the memory dump. The attacker left traces in the kernel heap.',
-    flag: 'flag{kmalloc_slab_f0r3ns1cs}',
+    title: 'CTF-01: Buffer Overflow',
+    incident: 'Stack buffer overflow in the custom syscall handler.',
+    trace: 'BUG: KASAN: stack-out-of-bounds in sys_custom_read+0x4f',
+    flag: 'flag{copy_from_us3r_sav3s}',
     timeLimit: 180,
-    hints: [
-      'The SLAB allocator leaves patterns in freed objects.',
-      'Use volatility or crash to inspect kmem_cache structures.',
-      'The flag is encoded in the freed slab object metadata.',
+    difficulty: 1,
+    mentorText:
+      'Welcome to CTF mode, operator! This is a warm-up challenge. ' +
+      'A custom syscall copies user data directly into a kernel buffer using memcpy. ' +
+      'This is a classic buffer overflow. The fix is simple: use the safe copy API. ' +
+      'Patch the code at the terminal, and you will earn your first flag.',
+    lesson: [
+      'Never use memcpy for user pointers in kernel space.',
+      'copy_from_user validates the pointer and prevents overflow.',
+      'Always check the return value for -EFAULT.',
     ],
-    challenge: {
-      title: 'FORENSICS TERMINAL',
-      question: 'Analyze the memory dump. What tool is used to examine Linux kernel memory structures offline?',
-      code: 'file memdump.raw\n# ELF 64-bit LSB core file\n# -> kernel crash dump format\n\n??? -f memdump.raw linux_pslist',
-      answers: ['volatility', 'vol', 'vol.py', 'volatility3'],
-      hint: 'The Python-based memory forensics framework.',
-      xp: 200,
+    diagnosis: {
+      title: 'CTF Diagnosis: Overflow Source',
+      question: 'What makes memcpy unsafe for copying user data into the kernel?',
+      code: 'sys_custom_read(char __user *ubuf, size_t len) {\n    char kbuf[256];\n    memcpy(kbuf, ubuf, len);  // <-- BUG\n}',
+      answers: ['no bounds check', 'no validation', 'user pointer', 'overflow', 'unchecked length'],
+      hint: 'The length is not validated and the user pointer is not checked.',
+      xp: 80,
     },
-    decode: {
-      title: 'DECODE TERMINAL',
-      question: 'The flag is XOR-encoded in the slab cache. What is the typical XOR key size used in simple kernel rootkit obfuscation?',
-      code: 'struct hidden_data {\n    char flag[32];\n    uint8_t xor_key;\n};\n// key = 0x??  (single byte)',
-      answers: ['1 byte', '1', 'single byte', '8 bit', '8 bits'],
-      hint: 'Simple XOR uses a single byte key (0x00-0xFF).',
-      xp: 300,
+    patch: {
+      title: 'CTF Patch: Safe Copy',
+      question: 'Replace memcpy with the safe kernel function for user-to-kernel copy.',
+      code: 'sys_custom_read(char __user *ubuf, size_t len) {\n    char kbuf[256];\n    if (len > sizeof(kbuf)) return -EINVAL;\n    if (___(kbuf, ubuf, len))\n        return -EFAULT;\n    return 0;\n}',
+      answers: ['copy_from_user'],
+      hint: 'The safe function that copies data FROM user space.',
+      xp: 150,
+      attempts: 3,
     },
-    concepts: ['memory forensics', 'SLAB cache', 'volatility framework'],
+    concepts: ['copy_from_user', 'buffer overflow', 'KASAN'],
     maze: [
       '###########################',
-      '#M......#.....#...........#',
-      '#.......#.....#...........#',
-      '#..###..#..##.#...####....#',
-      '#..#.......#......#.......#',
-      '#..#.......#......#.......#',
-      '#..####........##.#..###..#',
-      '#..........X..............#',
+      '#M......#........#........#',
+      '#.......#........#........#',
+      '#..###..#..####..#..###...#',
+      '#..#.......#........#.....#',
+      '#..#.......#........#.....#',
+      '#..####.......####..#..##.#',
+      '#..........D..............#',
       '#..........#..............#',
       '#..####....#...####..####.#',
       '#..#.......#.......#......#',
       '#..#..K....#.......#......#',
       '#..#.......#..####.#..###.#',
-      '#..####....#..#........D..#',
+      '#..####....#..#........P..#',
       '#..........#..#...........#',
       '#..###..####..#..####..##.#',
       '#..........#.....#........#',
       '#..........#.....#..G.....#',
       '#..####....#..####........#',
-      '#..........F...#.......B..#',
+      '#..............#.......B..#',
       '#..............#......E...#',
       '###########################',
     ],
   },
 
   /* ===============================================
-     CTF 2: Kernel Exploit Analysis
+     CTF 2: Use-After-Free Fix (Easy-Medium)
+     Difficulty: 2/5 - Two blanks to fill
      =============================================== */
   {
     id: 2,
-    title: 'CTF-02: Kernel Exploit Dev',
-    briefing: 'A zero-day kernel exploit was found in the wild. Reverse engineer the exploit payload and find the flag hidden in the shellcode.',
-    flag: 'flag{r0p_cha1n_k3rn3l_pwn}',
-    timeLimit: 210,
-    hints: [
-      'The exploit uses Return-Oriented Programming (ROP).',
-      'Check the gadget chain for the commit_creds(prepare_kernel_cred(0)) pattern.',
-      'The flag is assembled from ROP gadget addresses.',
+    title: 'CTF-02: Use-After-Free',
+    incident: 'SLAB use-after-free crash after freeing a network socket buffer.',
+    trace: 'BUG: KASAN: use-after-free in skb_release_data+0xa8',
+    flag: 'flag{null_aft3r_kfr33_alw4ys}',
+    timeLimit: 200,
+    difficulty: 2,
+    mentorText:
+      'This one is a bit trickier. A network driver frees an skb (socket buffer) ' +
+      'but keeps using the pointer afterward. The SLAB allocator may reassign that memory, ' +
+      'causing type confusion or data corruption. ' +
+      'Your job: free the memory AND null the pointer. Two fixes needed.',
+    lesson: [
+      'After kfree(), the pointer becomes a dangling reference.',
+      'Always set pointers to NULL after freeing.',
+      'KASAN detects UAF bugs by poisoning freed memory.',
     ],
-    challenge: {
-      title: 'EXPLOIT ANALYSIS TERMINAL',
-      question: 'What kernel function is called to escalate privileges to root in a typical kernel exploit?',
-      code: 'void *cred = prepare_kernel_cred(0);\n???(cred);\n// uid=0(root) gid=0(root)',
-      answers: ['commit_creds'],
-      hint: 'The function that applies a new credential set to the current task.',
+    diagnosis: {
+      title: 'CTF Diagnosis: UAF Pattern',
+      question: 'What type of bug occurs when freed memory is accessed through a stale pointer?',
+      code: 'kfree(skb->data);\n// ... later ...\nmemcpy(skb->data, payload, len); // CRASH',
+      answers: ['use after free', 'uaf', 'use-after-free', 'dangling pointer'],
+      hint: 'The memory was freed but the pointer still points to it.',
+      xp: 100,
+    },
+    patch: {
+      title: 'CTF Patch: Safe Deallocation',
+      question: 'Complete both lines to safely free and nullify the buffer.',
+      code: 'void release_skb(struct sk_buff *skb) {\n    if (skb->data) {\n        ___(skb->data);\n        skb->data = ___;\n    }\n}',
+      answers: ['kfree', 'NULL'],
+      hint: 'First free the memory, then set the pointer to the null sentinel.',
       xp: 250,
+      attempts: 3,
     },
-    decode: {
-      title: 'SHELLCODE TERMINAL',
-      question: 'In a ROP chain, what structure holds the saved return addresses on the kernel stack?',
-      code: '// Stack layout:\n// [rbp+0x00] saved_rbp\n// [rbp+0x08] return_addr  <-- gadget 1\n// [rbp+0x10] return_addr  <-- gadget 2\n// This structure is called the ???',
-      answers: ['stack frame', 'call stack', 'stack'],
-      hint: 'The data structure that stores function return addresses.',
-      xp: 350,
-    },
-    concepts: ['ROP chains', 'commit_creds', 'kernel stack exploitation'],
+    concepts: ['use-after-free', 'kfree + NULL', 'KASAN detection'],
     maze: [
       '###########################',
       '#M.........#..............#',
@@ -786,55 +792,64 @@ const CTF_LEVELS = [
       '#.....#....#....#.........#',
       '#.....#.........#.........#',
       '####..#..####...#...#####.#',
-      '#.........#..X..#.........#',
+      '#.........#..D..#.........#',
       '#.........#.....#.........#',
       '#..####...#.....####..###.#',
       '#..#......#..........#....#',
       '#..#......#....K.....#....#',
       '#..#...####..........#....#',
       '#..#......#...####...#....#',
-      '#.........#...#....D......#',
-      '#..####...#...#...........#',
+      '#.........#...#...........#',
+      '#..####...#...#..P........#',
       '#..#..........#...........#',
       '#..#..........#...####....#',
       '#..####..####.#......#....#',
-      '#............G#..F...#....#',
+      '#............G#......#....#',
       '#.............#...B..#..E.#',
       '###########################',
     ],
   },
 
   /* ===============================================
-     CTF 3: Rootkit Detection
+     CTF 3: Race Condition Lock (Medium)
+     Difficulty: 3/5 - Understanding lock primitives
      =============================================== */
   {
     id: 3,
-    title: 'CTF-03: Rootkit Hunter',
-    briefing: 'Intelligence reports a kernel rootkit on the target server. Find the hidden kernel module, analyze its hooks, and extract the flag from its encrypted config.',
-    flag: 'flag{ftrac3_h00k_d3t3ct0r}',
-    timeLimit: 240,
-    hints: [
-      'Hidden modules are removed from the module list but still in memory.',
-      'Check /sys/module/ vs lsmod output for discrepancies.',
-      'The rootkit config is stored in a proc entry with a random name.',
+    title: 'CTF-03: Race Condition',
+    incident: 'Data corruption in shared driver state from concurrent IRQ access.',
+    trace: 'lockdep: possible recursive lock in netdev_tx+0x2c0',
+    flag: 'flag{sp1n_l0ck_1rqsav3_ftw}',
+    timeLimit: 220,
+    difficulty: 3,
+    mentorText:
+      'Race condition in a network driver. Two CPUs hit the transmit path at the same time, ' +
+      'and the shared tx_ring buffer gets corrupted. A normal mutex will not work here because ' +
+      'we are in interrupt context. You need an IRQ-safe spinlock that also saves the CPU flags. ' +
+      'Complete both the lock and unlock calls correctly.',
+    lesson: [
+      'Spinlocks are needed for interrupt context synchronization.',
+      'spin_lock_irqsave disables IRQs and saves flags.',
+      'spin_unlock_irqrestore restores the saved flags.',
     ],
-    challenge: {
-      title: 'ROOTKIT DETECTION TERMINAL',
-      question: 'What /proc file shows all currently loaded kernel modules?',
-      code: 'cat /proc/???\n# Lists all loaded kernel modules\n# Compare with lsmod output for hidden modules',
-      answers: ['modules', '/proc/modules'],
-      hint: 'The proc file that lists every loaded module.',
-      xp: 220,
+    diagnosis: {
+      title: 'CTF Diagnosis: Lock Type',
+      question: 'Why can you not use a mutex in interrupt context?',
+      code: 'irq_handler(int irq, void *dev) {\n    mutex_lock(&dev->lock);  // BUG: scheduling in IRQ!\n    dev->tx_ring[head++] = pkt;\n    mutex_unlock(&dev->lock);\n}',
+      answers: ['mutex can sleep', 'sleep', 'cannot sleep in irq', 'scheduling'],
+      hint: 'Mutexes may call schedule(), which is forbidden in IRQ context.',
+      xp: 120,
     },
-    decode: {
-      title: 'MODULE ANALYSIS TERMINAL',
-      question: 'What is the kernel function that hides a module from the module list?',
-      code: 'static int __init rootkit_init(void) {\n    // Hide this module\n    ???(&THIS_MODULE->list);\n    return 0;\n}',
-      answers: ['list_del', 'list_del_init'],
-      hint: 'The linked-list function that removes a node from a doubly-linked list.',
-      xp: 380,
+    patch: {
+      title: 'CTF Patch: IRQ-Safe Lock',
+      question: 'Complete the lock/unlock pair for safe IRQ context locking.',
+      code: 'irq_handler(int irq, void *dev) {\n    unsigned long flags;\n    ___(&dev->lock, flags);\n    dev->tx_ring[head++] = pkt;\n    spin_unlock_irqrestore(&dev->lock, flags);\n}',
+      answers: ['spin_lock_irqsave'],
+      hint: 'The spinlock function that saves IRQ flags.',
+      xp: 350,
+      attempts: 2,
     },
-    concepts: ['hidden kernel modules', '/proc/modules', 'list manipulation'],
+    concepts: ['spin_lock_irqsave', 'IRQ context', 'race condition'],
     maze: [
       '###########################',
       '#M.....#..................#',
@@ -843,55 +858,65 @@ const CTF_LEVELS = [
       '#..#####...#........#.....#',
       '#..........#........#.....#',
       '#..........#...####.#..##.#',
-      '#..####....#.......X#.....#',
+      '#..####....#.......D#.....#',
       '#..#.......#.........#....#',
       '#..#....####..####...#....#',
       '#..#.......#..#......#....#',
       '#..........#..#..K...#....#',
       '#..####....#..#......#....#',
       '#..........#..####...#....#',
-      '#..........#........D.....#',
+      '#..........#..............#',
       '#..####..###...####.......#',
-      '#..#.......#...#..........#',
+      '#..#.......#...#..P.......#',
       '#..#.......#...#..........#',
       '#..#.......#...####...###.#',
-      '#..........#.......F.G....#',
+      '#..........#..........G...#',
       '#..........#......B..#..E.#',
       '###########################',
     ],
   },
 
   /* ===============================================
-     CTF 4: Network Stack Capture
+     CTF 4: eBPF Verifier Exploit (Medium-Hard)
+     Difficulty: 4/5 - Multi-concept challenge
      =============================================== */
   {
     id: 4,
-    title: 'CTF-04: Packet Capture',
-    briefing: 'A covert channel was detected in the kernel network stack. The attacker is exfiltrating data through ICMP echo packets. Capture and decode the flag from the packet payloads.',
-    flag: 'flag{1cmp_c0v3rt_ch4nn3l}',
-    timeLimit: 200,
-    hints: [
-      'ICMP echo request payloads can carry hidden data.',
-      'The netfilter hook at NF_INET_PRE_ROUTING captures all incoming packets.',
-      'Each ICMP packet payload contains one character of the flag.',
+    title: 'CTF-04: eBPF Verifier Bypass',
+    incident: 'Malicious eBPF program bypassed the verifier and accessed kernel memory.',
+    trace: 'SECURITY: eBPF verifier rejected: invalid mem access (CVE-2021-31440)',
+    flag: 'flag{cap_bpf_v3r1f1er_g4te}',
+    timeLimit: 240,
+    difficulty: 4,
+    mentorText:
+      'This is a real-world scenario. An attacker crafted a BPF program that exploits ' +
+      'a bounds-tracking bug in the eBPF verifier (similar to CVE-2021-31440). ' +
+      'The verifier thought the register value was bounded, but at runtime it was not. ' +
+      'Your job: add the missing capability check AND add the bounds assertion. ' +
+      'Two separate fixes in a single patch.',
+    lesson: [
+      'eBPF programs run in the kernel and must pass the verifier.',
+      'CAP_BPF capability is required to load BPF programs.',
+      'The verifier tracks value ranges to prevent OOB access.',
     ],
-    challenge: {
-      title: 'PACKET CAPTURE TERMINAL',
-      question: 'What netfilter hook point catches packets before routing decisions?',
-      code: 'static struct nf_hook_ops nfho = {\n    .hook     = capture_func,\n    .pf       = PF_INET,\n    .hooknum  = ???,\n    .priority = NF_IP_PRI_FIRST,\n};',
-      answers: ['NF_INET_PRE_ROUTING', 'PRE_ROUTING'],
-      hint: 'The first hook point in the netfilter chain.',
-      xp: 280,
+    diagnosis: {
+      title: 'CTF Diagnosis: Verifier Gap',
+      question: 'What component checks eBPF programs for safety before they run in the kernel?',
+      code: 'bpf(BPF_PROG_LOAD, &attr, sizeof(attr));\n// EACCES: program rejected by ???',
+      answers: ['verifier', 'ebpf verifier', 'bpf verifier'],
+      hint: 'It does static analysis of every instruction before loading.',
+      xp: 150,
     },
-    decode: {
-      title: 'DECODE CHANNEL TERMINAL',
-      question: 'What is the ICMP type number for echo request (ping)?',
-      code: 'struct icmphdr *icmp = icmp_hdr(skb);\nif (icmp->type == ???) {\n    // Extract hidden data from payload\n    extract_covert_data(skb);\n}',
-      answers: ['8', 'ICMP_ECHO', '0x08'],
-      hint: 'The type field value for a ping request packet.',
-      xp: 320,
+    patch: {
+      title: 'CTF Patch: Capability + Bounds Check',
+      question: 'Complete the capability check function name.',
+      code: 'int bpf_check_prog(union bpf_attr *attr) {\n    if (!___(CAP_BPF))\n        return -EPERM;\n    if (!bpf_verifier_check(attr->insns, attr->insn_cnt))\n        return -EINVAL;\n    return bpf_prog_load(attr);\n}',
+      answers: ['capable', 'ns_capable'],
+      hint: 'The kernel function that checks Linux capabilities.',
+      xp: 450,
+      attempts: 2,
     },
-    concepts: ['netfilter hooks', 'ICMP covert channels', 'packet inspection'],
+    concepts: ['eBPF verifier', 'CAP_BPF', 'bounds checking'],
     maze: [
       '###########################',
       '#M........#...............#',
@@ -900,16 +925,16 @@ const CTF_LEVELS = [
       '#..#..........#...........#',
       '#..#..........#...........#',
       '#..#...####...#..####.....#',
-      '#......#..X...#..#........#',
+      '#......#..D...#..#........#',
       '#......#......#..#........#',
       '#..#####......#..#..####..#',
       '#.........#...#...........#',
       '#.........#...#...........#',
       '#..####...#...#..####.....#',
       '#..#......#......#..K.....#',
-      '#..#......#......#....D...#',
+      '#..#......#......#........#',
       '#..#...####...####..####..#',
-      '#..........#..........F...#',
+      '#..........#..........P...#',
       '#..........#..............#',
       '#..####....#....####......#',
       '#..........#........G.....#',
@@ -919,36 +944,46 @@ const CTF_LEVELS = [
   },
 
   /* ===============================================
-     CTF 5: Privilege Escalation Chain
+     CTF 5: Container Escape Full Chain (Hard)
+     Difficulty: 5/5 - Complete seccomp filter
      =============================================== */
   {
     id: 5,
-    title: 'CTF-05: Privesc Chain',
-    briefing: 'The final challenge. Chain multiple kernel vulnerabilities together: a race condition, a UAF bug, and a namespace escape. Capture the root flag from the host namespace.',
-    flag: 'flag{full_k3rn3l_ch41n_r00t}',
+    title: 'CTF-05: Container Escape',
+    incident: 'Namespace escape from unprivileged container via unshare() syscall.',
+    trace: 'SECURITY: unshare(CLONE_NEWUSER) from unprivileged container context',
+    flag: 'flag{s3cc0mp_c0nta1n3r_l0ck}',
     timeLimit: 300,
-    hints: [
-      'Step 1: Win the race condition to corrupt the refcount.',
-      'Step 2: Trigger UAF to overwrite cred structure.',
-      'Step 3: Escape the namespace using the forged credentials.',
+    difficulty: 5,
+    mentorText:
+      'The final boss. An attacker inside a container calls unshare(CLONE_NEWUSER) to create a ' +
+      'new user namespace, gaining root-like capabilities to escape the container. ' +
+      'Your mission: write a seccomp-bpf filter that blocks the unshare syscall ' +
+      'while allowing all other syscalls to pass. This requires understanding both ' +
+      'BPF filter syntax and seccomp return values. Good luck, operator.',
+    lesson: [
+      'Containers use namespaces + cgroups + seccomp for isolation.',
+      'unshare() with CLONE_NEWUSER can bypass container restrictions.',
+      'Seccomp-BPF filters can block dangerous syscalls at kernel level.',
     ],
-    challenge: {
-      title: 'EXPLOIT CHAIN TERMINAL',
-      question: 'In the Linux kernel, what structure holds the security credentials (uid, gid, capabilities) of a process?',
-      code: 'struct task_struct {\n    ...\n    const struct ??? *cred;\n    ...\n};',
-      answers: ['cred', 'cred_struct'],
-      hint: 'The structure name that is also the field name in task_struct.',
-      xp: 350,
+    diagnosis: {
+      title: 'CTF Diagnosis: Escape Vector',
+      question: 'What syscall does the attacker use to create a new user namespace from inside the container?',
+      code: '// Container process calls:\nsyscall(???, CLONE_NEWUSER);\n// Now has fake root caps inside new namespace',
+      answers: ['unshare', '__NR_unshare'],
+      hint: 'The syscall that detaches from existing namespaces.',
+      xp: 180,
     },
-    decode: {
-      title: 'ROOT CAPTURE TERMINAL',
-      question: 'After overwriting the cred structure, what uid value gives you root access?',
-      code: 'struct cred *new = prepare_kernel_cred(NULL);\nnew->uid = KUIDT_INIT(???);\nnew->gid = KGIDT_INIT(???);\ncommit_creds(new);',
-      answers: ['0'],
-      hint: 'The numeric user ID of the root user on Linux.',
-      xp: 500,
+    patch: {
+      title: 'CTF Patch: Seccomp Filter',
+      question: 'Complete the seccomp return value that allows non-matching syscalls to continue normally.',
+      code: 'struct sock_filter filter[] = {\n    BPF_STMT(BPF_LD|BPF_W|BPF_ABS,\n        offsetof(struct seccomp_data, nr)),\n    BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K,\n        __NR_unshare, 0, 1),\n    BPF_STMT(BPF_RET|BPF_K, SECCOMP_RET_KILL),\n    BPF_STMT(BPF_RET|BPF_K, ___),\n};',
+      answers: ['SECCOMP_RET_ALLOW'],
+      hint: 'The seccomp return value that permits the syscall.',
+      xp: 600,
+      attempts: 2,
     },
-    concepts: ['race condition', 'cred structure', 'full exploit chain'],
+    concepts: ['seccomp-bpf', 'container escape', 'namespace isolation'],
     maze: [
       '###########################',
       '#M........#...............#',
@@ -957,17 +992,17 @@ const CTF_LEVELS = [
       '#..#..........#...........#',
       '#..#..........#...........#',
       '#..#...####...#...####....#',
-      '#......#..X...#...#.......#',
+      '#......#..D...#...#.......#',
       '#......#......#...#.......#',
       '#..#####......#...#..###..#',
       '#.........#...#...........#',
       '#.........#...#....K......#',
       '#..####...#...#...........#',
-      '#..#......#......####..D..#',
+      '#..#......#......####.....#',
       '#..#......#......#........#',
       '#..#...####...####..####..#',
+      '#..........#..........P...#',
       '#..........#..............#',
-      '#..........#..........F...#',
       '#..####....#....####......#',
       '#..........#........G.....#',
       '#..........#....B....#..E.#',
@@ -978,7 +1013,7 @@ const CTF_LEVELS = [
 
 function buildLevelMap(level) {
   const points = {};
-  const charMap = level.decode ? CTF_CHAR_TO_TILE : CHAR_TO_TILE;
+  const charMap = CHAR_TO_TILE;
   const rows = level.maze.map((row, y) =>
     row.split('').map((char, x) => {
       const tile = charMap[char] ?? TILE.FLOOR;
@@ -989,9 +1024,6 @@ function buildLevelMap(level) {
       if (char === 'G') points.gate = { x, y };
       if (char === 'E') points.exit = { x, y };
       if (char === 'B') points.bonus = { x, y };
-      if (char === 'F') points.flag = { x, y };
-      if (char === 'X') points.decrypt = { x, y };
-      if (char === 'W') points.firewall = { x, y };
       return tile;
     })
   );
