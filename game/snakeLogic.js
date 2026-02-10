@@ -1430,6 +1430,315 @@ const CTF_LEVELS = [
       '###########################',
     ],
   },
+
+  /* ═══════════════════════════════════════════════
+     PHASE 3: ZERO-DAY RESPONSE (2025 CVEs)
+     The latest kernel threats. Bleeding-edge exploits.
+     ═══════════════════════════════════════════════ */
+
+  /* ===============================================
+     CTF 11: vsock UAF — VM Escape Vector
+     Real-world: CVE-2025-21756
+     Difficulty: 3/5
+     =============================================== */
+  {
+    id: 11,
+    title: 'CTF-11: vsock UAF [CVE-2025-21756]',
+    incident: 'Use-after-free in vsock transport reassignment allows VM-to-host privilege escalation.',
+    trace: 'BUG: KASAN: slab-use-after-free in vsock_bind+0x88/0x120 [vsock]\nWARNING: vsock_remove_sock: refcount underflow on transport reassignment',
+    flag: 'flag{vs0ck_d3ad_r3fc0unt_uaf}',
+    timeLimit: 240,
+    difficulty: 3,
+    mentorText:
+      'Phase 3: Zero-Day Response! These are 2025 CVEs -- the bleeding edge. ' +
+      'CVE-2025-21756, nicknamed "Attack of the Vsock", was disclosed in February 2025. ' +
+      'vsock (VM Sockets) allows guest-to-host communication in VMware, KVM, and Hyper-V. ' +
+      'The bug: vsock_create() adds the socket to the unbound list (refcnt=2). ' +
+      'During transport reassignment, vsock_remove_sock() unconditionally calls vsock_remove_bound(), ' +
+      'decrementing refcnt to 1. Later, vsock_bind() calls __vsock_remove_bound() again, ' +
+      'dropping refcnt to 0 -- the object is freed! Any subsequent access is a UAF. ' +
+      'Michael Hoefler built a full exploit: heap spray with msg_msg, KASLR bypass via vsock_diag_dump(), ' +
+      'ROP chain to commit_creds(init_cred) for root. His first kernel exploit ever! ' +
+      'The fix: only remove the binding when the socket is actually being destroyed. ' +
+      'Check the SOCK_DEAD flag -- if it is not set, skip the binding removal.',
+    lesson: [
+      'CVE-2025-21756: vsock refcount UAF, full root exploit published.',
+      'vsock_remove_sock() must only unbind during real socket destruction.',
+      'SOCK_DEAD flag distinguishes destruction from transport reassignment.',
+      'sock_orphan() sets SOCK_DEAD -- must be called BEFORE transport->release().',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Refcount Underflow',
+      question: 'vsock_remove_sock() unconditionally calls vsock_remove_bound() during transport reassignment, causing a double refcount decrement. The object is freed while still referenced. What vulnerability class is this?',
+      code: '/* net/vmw_vsock/af_vsock.c - VULNERABLE */\nvoid vsock_remove_sock(struct vsock_sock *vsk)\n{\n    /* BUG: unconditional unbind! */\n    /* During transport reassignment,\n       this drops refcnt incorrectly.\n       Later vsock_bind() drops it to 0\n       => object freed => UAF! */\n    vsock_remove_bound(vsk);\n    vsock_remove_connected(vsk);\n}',
+      answers: ['use after free', 'use-after-free', 'uaf'],
+      hint: 'The socket object is freed (refcnt=0) but still referenced in the bind table. Accessing freed memory is...',
+      xp: 130,
+    },
+    patch: {
+      title: 'Patch: Guard Binding Removal [net/vmw_vsock/af_vsock.c]',
+      question: 'Complete the flag check that ensures binding is only removed during real socket destruction, not transport reassignment.',
+      code: '/* net/vmw_vsock/af_vsock.c - PATCHED */\nvoid vsock_remove_sock(struct vsock_sock *vsk)\n{\n    /* FIX: only remove binding when socket\n       is actually being destroyed */\n    if (sock_flag(sk_vsock(vsk), ___))\n        vsock_remove_bound(vsk);\n    vsock_remove_connected(vsk);\n}',
+      answers: ['SOCK_DEAD'],
+      hint: 'The socket flag that marks a socket as "being destroyed". sock_orphan() sets this flag. SOCK_???.',
+      xp: 300,
+      attempts: 2,
+    },
+    concepts: ['SOCK_DEAD', 'refcount', 'vsock', 'CVE-2025-21756'],
+    maze: [
+      '###########################',
+      '#M........#...............#',
+      '#.........#...............#',
+      '#..####...#....####.......#',
+      '#..#..........#...........#',
+      '#..#..........#...........#',
+      '#..#...####...#..####.....#',
+      '#......#......#..#..D.....#',
+      '#......#......#..#........#',
+      '#..#####......#..#...####.#',
+      '#.........#...#...........#',
+      '#.........#...#..K........#',
+      '#..####...#...#...........#',
+      '#..#......#.......####....#',
+      '#..#......#.......#.......#',
+      '#..#...####...####...###..#',
+      '#..........#.........P....#',
+      '#..........#..............#',
+      '#..####....#.....####.....#',
+      '#..........#.........G....#',
+      '#..........#....B.....#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 12: UNIX Socket OOB — Chrome Sandbox Escape
+     Real-world: CVE-2025-38236
+     Difficulty: 5/5
+     =============================================== */
+  {
+    id: 12,
+    title: 'CTF-12: UNIX OOB UAF [CVE-2025-38236]',
+    incident: 'AF_UNIX MSG_OOB use-after-free enables Chrome renderer sandbox escape to kernel.',
+    trace: 'BUG: KASAN: slab-use-after-free in unix_stream_read_actor+0x3c/0x70 [unix]\nWARNING: consumed OOB skb freed but u->oob_skb still references it',
+    flag: 'flag{un1x_00b_chr0me_3scap3}',
+    timeLimit: 300,
+    difficulty: 5,
+    mentorText:
+      'CVE-2025-38236 -- Jann Horn from Google Project Zero used this to escape from Chrome\'s renderer sandbox ' +
+      'all the way to full kernel control. Published August 2025. ' +
+      'UNIX domain sockets support MSG_OOB (out-of-band) data. When you recv() an OOB byte, ' +
+      'the kernel keeps the consumed skb on the receive queue as a zero-length boundary marker. ' +
+      'The bug: if you send a second OOB byte, the old consumed skb is still on the queue. ' +
+      'When recv(MSG_OOB) processes the new OOB byte, the old skb can be freed via the SO_PEEK_OFF ' +
+      'skip loop (which infinite-loops on zero-length skbs!), but u->oob_skb still references it. ' +
+      'Next recv(MSG_OOB) dereferences the freed skb -- UAF! ' +
+      'Jann Horn built a full exploit from inside Chrome\'s sandbox: one-byte-at-a-time kernel memory read, ' +
+      'arbitrary kernel memory increment, all the way to root. ' +
+      'The fix: when consuming an OOB byte, check if the previous skb on the queue is a stale ' +
+      'zero-length consumed marker. If so, unlink it from the receive queue to prevent accumulation. ' +
+      'CISA added this to their Known Exploited Vulnerabilities catalog.',
+    lesson: [
+      'CVE-2025-38236: AF_UNIX MSG_OOB UAF, Chrome sandbox escape to kernel.',
+      'Consumed OOB skbs with unix_skb_len()==0 must be cleaned up before new OOB arrives.',
+      '__skb_unlink() safely removes an skb from a queue under the queue lock.',
+      'Even unused features (MSG_OOB) in sandboxed code paths can be exploited.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Stale OOB Marker',
+      question: 'recv(MSG_OOB) consumes the OOB skb, but it remains on the queue as a zero-length marker. A second OOB causes the old marker to be freed while u->oob_skb still points to it. What vulnerability class is this?',
+      code: '/* net/unix/af_unix.c - VULNERABLE */\nstatic int unix_stream_recv_urg(\n    struct unix_stream_read_state *state)\n{\n    /* ... */\n    oob_skb = u->oob_skb;\n    if (!(state->flags & MSG_PEEK))\n        WRITE_ONCE(u->oob_skb, NULL);\n    /* BUG: previous consumed OOB skb with\n       unix_skb_len()==0 stays on the queue!\n       When second OOB arrives, the old one\n       is freed but still referenced => UAF */\n    chunk = state->recv_actor(oob_skb, ...);\n    UNIXCB(oob_skb).consumed += 1;\n    consume_skb(oob_skb);\n}',
+      answers: ['use after free', 'use-after-free', 'uaf'],
+      hint: 'The stale consumed skb is freed, but pointers to it remain. Accessing memory that has already been freed...',
+      xp: 200,
+    },
+    patch: {
+      title: 'Patch: Unlink Stale OOB Marker [net/unix/af_unix.c]',
+      question: 'Before freeing the OOB skb, the previous consumed marker must be removed from the receive queue. What kernel function unlinks an skb from a queue?',
+      code: '/* net/unix/af_unix.c - PATCHED */\nstatic int unix_stream_recv_urg(\n    struct unix_stream_read_state *state)\n{\n    struct sk_buff *oob_skb, *read_skb = NULL;\n    /* ... */\n    spin_lock(&sk->sk_receive_queue.lock);\n    oob_skb = u->oob_skb;\n    if (!(state->flags & MSG_PEEK)) {\n        WRITE_ONCE(u->oob_skb, NULL);\n        /* FIX: remove stale consumed OOB skb */\n        if (oob_skb->prev !=\n            (struct sk_buff *)&sk->sk_receive_queue\n            && !unix_skb_len(oob_skb->prev)) {\n            read_skb = oob_skb->prev;\n            ___(read_skb, &sk->sk_receive_queue);\n        }\n    }\n    spin_unlock(&sk->sk_receive_queue.lock);\n    /* ... */\n    consume_skb(read_skb);\n}',
+      answers: ['__skb_unlink'],
+      hint: 'The function that removes an skb from a queue list. Double underscore prefix, skb_unlink.',
+      xp: 500,
+      attempts: 2,
+    },
+    concepts: ['__skb_unlink', 'MSG_OOB', 'AF_UNIX', 'CVE-2025-38236'],
+    maze: [
+      '###########################',
+      '#M.......#................#',
+      '#........#................#',
+      '#..####..#....####..####..#',
+      '#..#..........#.......#...#',
+      '#..#..........#.......#...#',
+      '#..#...####...#..####.....#',
+      '#......#......#......D....#',
+      '#......#......#...........#',
+      '#..#####......####...####.#',
+      '#..........#..............#',
+      '#..........#.....K........#',
+      '#..####....#..............#',
+      '#..#.......#...####..###..#',
+      '#..#.......#...#..........#',
+      '#..#...........#...P......#',
+      '#..####..####..#..........#',
+      '#..........#...####..####.#',
+      '#..........#............G.#',
+      '#..####....#..............#',
+      '#..........#.....B....#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 13: POSIX CPU Timer Race — Racing the Zombie
+     Real-world: CVE-2025-38352
+     Difficulty: 4/5
+     =============================================== */
+  {
+    id: 13,
+    title: 'CTF-13: Timer Race [CVE-2025-38352]',
+    incident: 'TOCTOU race in POSIX CPU timers allows use-after-free on zombie task struct.',
+    trace: 'BUG: KASAN: use-after-free in handle_posix_cpu_timers+0x1f0/0x4a0 [kernel]\nWARNING: k_itimer freed while still on firing list after release_task()',
+    flag: 'flag{z0mb1e_t1mer_ex1t_st4te}',
+    timeLimit: 270,
+    difficulty: 4,
+    mentorText:
+      'CVE-2025-38352, codenamed "Chronomaly" -- a TOCTOU race in POSIX CPU timers, September 2025. ' +
+      'Confirmed exploited in the wild on Android devices. Added to CISA KEV catalog. ' +
+      'The race: (1) A process exits, setting tsk->exit_state = EXIT_ZOMBIE. ' +
+      '(2) A scheduler tick fires, run_posix_cpu_timers() calls handle_posix_cpu_timers(). ' +
+      'It acquires sighand lock, collects firing timers (setting timer->it.cpu.firing = true), ' +
+      'then RELEASES the sighand lock. (3) Now the zombie can be reaped by waitpid() -> release_task(). ' +
+      'The task struct is freed! (4) Meanwhile, another thread calls timer_delete() -> posix_cpu_timer_del(). ' +
+      'It tries lock_task_sighand(tsk) but FAILS because the task is already freed. ' +
+      'It never sees firing==true, so it frees the k_itimer via RCU. ' +
+      '(5) handle_posix_cpu_timers() is still iterating the firing list -- it touches the freed k_itimer. UAF! ' +
+      'The fix is elegant: check tsk->exit_state at the top of run_posix_cpu_timers(). ' +
+      'If the task is a zombie, return immediately. No timer handling = no race window.',
+    lesson: [
+      'CVE-2025-38352: POSIX CPU timer TOCTOU race, exploited on Android in the wild.',
+      'Zombie tasks (exit_state != 0) must not process timers -- they can be reaped at any time.',
+      'The race window opens between unlock_task_sighand() and the firing list iteration.',
+      'Fix: early return if tsk->exit_state is set. One line prevents the entire exploit chain.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Racing the Zombie',
+      question: 'handle_posix_cpu_timers() releases the sighand lock, then iterates the firing list. Meanwhile, release_task() frees the zombie task. posix_cpu_timer_del() misses the firing flag. What type of race vulnerability is this?',
+      code: '/* kernel/time/posix-cpu-timers.c - VULNERABLE */\nvoid run_posix_cpu_timers(void)\n{\n    struct task_struct *tsk = current;\n    /* BUG: no check if task is exiting!\n       If tsk->exit_state == EXIT_ZOMBIE,\n       release_task() can free it while\n       handle_posix_cpu_timers() iterates\n       the firing list => UAF on k_itimer */\n    if (!fastpath_timer_check(tsk))\n        return;\n    __run_posix_cpu_timers(tsk);\n}',
+      answers: ['toctou', 'TOCTOU', 'time of check time of use', 'race condition', 'race'],
+      hint: 'The sighand lock is checked and released, then a concurrent operation invalidates the assumption. Time-of-Check vs Time-of-Use.',
+      xp: 160,
+    },
+    patch: {
+      title: 'Patch: Early Exit for Zombies [kernel/time/posix-cpu-timers.c]',
+      question: 'Complete the task_struct field that must be checked to prevent timer handling on zombie tasks.',
+      code: '/* kernel/time/posix-cpu-timers.c - PATCHED */\nvoid run_posix_cpu_timers(void)\n{\n    struct task_struct *tsk = current;\n    lockdep_assert_irqs_disabled();\n\n    /* FIX: if task is exiting, do not\n       handle timers. release_task() could\n       free the task at any moment. */\n    if (tsk->___)\n        return;\n\n    if (!fastpath_timer_check(tsk))\n        return;\n    __run_posix_cpu_timers(tsk);\n}',
+      answers: ['exit_state'],
+      hint: 'The task_struct field set to EXIT_ZOMBIE or EXIT_DEAD when a process exits. It starts with "exit_".',
+      xp: 400,
+      attempts: 2,
+    },
+    concepts: ['TOCTOU', 'exit_state', 'POSIX timers', 'CVE-2025-38352'],
+    maze: [
+      '###########################',
+      '#M.........#..............#',
+      '#..........#..............#',
+      '#..####....#...####..###..#',
+      '#.....#....#...#..........#',
+      '#.....#........#..........#',
+      '#..####..####..#...####...#',
+      '#........#.........#......#',
+      '#........#..D......#......#',
+      '#..####..#.........#..###.#',
+      '#..#.........#............#',
+      '#..#.........#....K.......#',
+      '#..#..####...#............#',
+      '#..#.........#....####....#',
+      '#............#....#.......#',
+      '#..####..#...#....#..P....#',
+      '#..#.....#...#....#.......#',
+      '#..#.....#...####.#..####.#',
+      '#..####..#............#.G.#',
+      '#........#..............B.#',
+      '#........#............#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 14: Rust Binder Race — The First Rust CVE
+     Real-world: CVE-2025-68260
+     Difficulty: 3/5
+     =============================================== */
+  {
+    id: 14,
+    title: 'CTF-14: Rust Binder [CVE-2025-68260]',
+    incident: 'Race condition in Rust Binder driver death_list causes data race and kernel panic.',
+    trace: 'Unable to handle kernel paging request at virtual address 000bb9841bcac70e\nInternal error: Oops: 0000000096000044 [#1] PREEMPT SMP -- rust_binder',
+    flag: 'flag{rust_b1nd3r_p0p_fr0nt}',
+    timeLimit: 240,
+    difficulty: 3,
+    mentorText:
+      'CVE-2025-68260 -- the FIRST CVE ever assigned to Rust code in the Linux kernel! ' +
+      'Reported December 2025 by Greg Kroah-Hartman. ' +
+      'The Rust Binder driver (rust_binder) handles Android IPC. In Node::release(), the code used ' +
+      'mem::take() to move the entire death_list into a local variable, then dropped the lock, ' +
+      'then iterated freely with a for loop. The problem: with intrusive linked lists, ' +
+      'mem::take() moves the list container but individual nodes still have stale prev/next pointers. ' +
+      'Another thread calling remove() on a node follows the stale pointers -- data race! ' +
+      'Rust\'s borrow checker could NOT prevent this because the race happens through unsafe blocks ' +
+      'with incorrect safety invariant comments. The fix is elegant: instead of mem::take() + for loop, ' +
+      'use pop_front() to extract one element at a time while the lock is held. ' +
+      'Drop the lock only for per-element processing, then re-acquire for the next extraction. ' +
+      'This proves that unsafe Rust still needs careful manual review of concurrency invariants.',
+    lesson: [
+      'CVE-2025-68260: first Rust CVE in Linux kernel (Binder driver).',
+      'mem::take() on intrusive lists leaves stale prev/next pointers in nodes.',
+      'pop_front() extracts one item at a time under the lock -- safe pattern.',
+      'Rust\'s borrow checker cannot prevent logic errors inside unsafe blocks.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Intrusive List Data Race',
+      question: 'Node::release() uses mem::take() to move the death_list, drops the lock, then iterates. Another thread calls remove() on a node with stale prev/next pointers. What type of concurrency bug is this?',
+      code: '// drivers/android/binder/node.rs - VULNERABLE\nfn release(self) {\n    // Move entire list into local variable\n    let death_list = core::mem::take(\n        &mut self.inner.access_mut(\n            &mut guard).death_list);\n    drop(guard);  // LOCK RELEASED!\n    // Iterating without the lock...\n    // Another thread calls remove() on nodes\n    // with stale prev/next pointers => RACE!\n    for death in death_list {\n        death.into_arc().set_dead();\n    }\n}',
+      answers: ['data race', 'race condition', 'race', 'data-race'],
+      hint: 'Two threads access the same prev/next pointers without synchronization. One iterates, the other modifies. This is a...',
+      xp: 130,
+    },
+    patch: {
+      title: 'Patch: Safe List Extraction [drivers/android/binder/node.rs]',
+      question: 'Replace mem::take() + for loop with a safe pattern that extracts one element at a time under the lock. What List method removes and returns the first element?',
+      code: '// drivers/android/binder/node.rs - PATCHED\nfn release(self) {\n    // FIX: extract one item at a time\n    // while holding the lock\n    while let Some(death) = self.inner\n        .access_mut(&mut guard)\n        .death_list.___() {\n        drop(guard); // unlock for processing\n        death.into_arc().set_dead();\n        guard = self.owner.inner.lock();\n        // re-acquire lock for next item\n    }\n}',
+      answers: ['pop_front'],
+      hint: 'The standard method to remove and return the first element from a linked list. pop_???.',
+      xp: 300,
+      attempts: 3,
+    },
+    concepts: ['pop_front', 'intrusive list', 'unsafe Rust', 'CVE-2025-68260'],
+    maze: [
+      '###########################',
+      '#M........#...............#',
+      '#.........#...............#',
+      '#..####...#...####..###...#',
+      '#.....#.......#...........#',
+      '#.....#.......#...........#',
+      '#..####..####.#..####..##.#',
+      '#........#....#........D..#',
+      '#........#....#...........#',
+      '#..####..#....####..#####.#',
+      '#..#.....#...........#....#',
+      '#..#..K..#...........#....#',
+      '#..#.....#...####....#....#',
+      '#..####..#...#.......#....#',
+      '#........#...#............#',
+      '#..####..#...#...####..##.#',
+      '#........#.......#..P.....#',
+      '#........#.......#........#',
+      '#..####..####....####..#..#',
+      '#................#....G...#',
+      '#.........B......#.....E..#',
+      '###########################',
+    ],
+  },
 ];
 
 function buildLevelMap(level) {
