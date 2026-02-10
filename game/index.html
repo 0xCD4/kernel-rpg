@@ -18,6 +18,9 @@
 
   <title>ring0 - kernel incident training ground</title>
 
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -62,7 +65,7 @@
         <button id="mode-ctf" class="mode-card mode-card-ctf" type="button">
           <span class="mode-card-icon">⚑</span>
           <h3>CTF Mode</h3>
-          <p>5 timed capture-the-flag challenges. Find flags, decode secrets, race against the clock.</p>
+          <p>14 real CVE-based challenges. Investigate kernel attack chains, fix the code, earn the flag.</p>
           <span class="mode-card-tag tag-ctf">COMPETE</span>
         </button>
       </div>
@@ -286,6 +289,102 @@
   </main>
 
   <!-- ===============================================
+       TRAINING INSTRUCTIONS OVERLAY
+       =============================================== -->
+  <div id="training-instructions-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window ctf-instructions-window training-instructions-window">
+      <div class="ctf-instr-header training-instr-header">
+        <span class="ctf-instr-icon training-instr-icon">&#x2B21;</span>
+        <h3>Kernel Incident Training</h3>
+      </div>
+      <div class="ctf-instr-body">
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num training-num">1</span>
+          <div>
+            <strong>Get the Incident Briefing</strong>
+            <p>Walk to the <span class="ctf-hl mentor">Mentor (M)</span> and press <kbd>E</kbd> to learn about the kernel incident.</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num training-num">2</span>
+          <div>
+            <strong>Diagnose the Root Cause</strong>
+            <p>Go to the <span class="ctf-hl diag">Diagnosis Terminal (D)</span> and identify the root cause of the problem.</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num training-num">3</span>
+          <div>
+            <strong>Patch the Kernel Code</strong>
+            <p>Walk to the <span class="ctf-hl flag">Patch Terminal (P)</span> and write the fix. Get it right to earn XP!</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num training-num">4</span>
+          <div>
+            <strong>Learn &amp; Advance</strong>
+            <p>Visit <span class="ctf-hl gate">Concept (K)</span> nodes, then find the <span class="ctf-hl gate">Gate (G)</span> to proceed to the next level.</p>
+          </div>
+        </div>
+      </div>
+      <div class="ctf-instr-controls">
+        <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move &nbsp; <kbd>E</kbd> Interact &nbsp; <kbd>H</kbd> Hint &nbsp; <kbd>R</kbd> Reset</p>
+      </div>
+      <div class="dialog-actions lc-actions">
+        <button id="training-instr-start" type="button" class="btn-primary">Start Training</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===============================================
+       CTF INSTRUCTIONS OVERLAY
+       =============================================== -->
+  <div id="ctf-instructions-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window ctf-instructions-window">
+      <div class="ctf-instr-header">
+        <span class="ctf-instr-icon">⚑</span>
+        <h3>Operation Ring-Zero</h3>
+      </div>
+      <div class="ctf-instr-body">
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num">1</span>
+          <div>
+            <strong>Read the Briefing</strong>
+            <p>Walk to the <span class="ctf-hl mentor">Mentor (M)</span> and press <kbd>E</kbd> to get the mission briefing.</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num">2</span>
+          <div>
+            <strong>Diagnose the CVE</strong>
+            <p>Go to the <span class="ctf-hl diag">Diagnosis Terminal (D)</span> and identify the root cause of the real-world kernel vulnerability.</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num">3</span>
+          <div>
+            <strong>Fix the Code &amp; Earn the Flag</strong>
+            <p>Go to the <span class="ctf-hl flag">Patch Terminal (P)</span> and fix the kernel code. Correct patch = flag earned!</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num">4</span>
+          <div>
+            <strong>Escape!</strong>
+            <p>Walk to the <span class="ctf-hl gate">Gate (G)</span> and exit before time runs out. Dodge the kernel bugs!</p>
+          </div>
+        </div>
+      </div>
+      <div class="ctf-instr-controls">
+        <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move &nbsp; <kbd>E</kbd> Interact &nbsp; <kbd>H</kbd> Hint &nbsp; <kbd>R</kbd> Reset</p>
+      </div>
+      <div class="dialog-actions lc-actions">
+        <button id="ctf-instr-start" type="button" class="btn-primary">Start CTF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===============================================
        CTF FLAG CAPTURE OVERLAY
        =============================================== -->
   <div id="flag-overlay" class="dialog-overlay hidden">
@@ -294,10 +393,10 @@
         <span class="terminal-dot dot-red"></span>
         <span class="terminal-dot dot-yellow"></span>
         <span class="terminal-dot dot-green"></span>
-        <span class="terminal-header-text" id="flag-title">FLAG CAPTURED</span>
+        <span class="terminal-header-text" id="flag-title">FLAG EARNED</span>
       </div>
       <div class="flag-display">
-        <p class="flag-label">Flag found:</p>
+        <p class="flag-label">Code fixed! Flag earned:</p>
         <pre id="flag-value" class="flag-value-box"></pre>
       </div>
       <p id="flag-bonus" class="flag-bonus-text"></p>
@@ -307,30 +406,6 @@
     </div>
   </div>
 
-  <!-- ===============================================
-       CTF DECODE TERMINAL OVERLAY
-       =============================================== -->
-  <div id="decode-overlay" class="dialog-overlay hidden">
-    <div class="dialog-window terminal-window">
-      <div class="terminal-header">
-        <span class="terminal-dot dot-red"></span>
-        <span class="terminal-dot dot-yellow"></span>
-        <span class="terminal-dot dot-green"></span>
-        <span class="terminal-header-text" id="decode-title">DECODE TERMINAL</span>
-      </div>
-      <p id="decode-text" class="terminal-question"></p>
-      <pre id="decode-code" class="terminal-code-block"></pre>
-      <div class="terminal-input-row">
-        <span class="terminal-prompt">$</span>
-        <input id="decode-input" type="text" autocomplete="off" spellcheck="false" placeholder="type your answer..." />
-      </div>
-      <p id="decode-feedback" class="terminal-feedback"></p>
-      <div class="dialog-actions">
-        <button id="decode-submit" type="button" class="btn-primary">Submit</button>
-        <button id="decode-close" type="button" class="btn-secondary">Cancel</button>
-      </div>
-    </div>
-  </div>
 
   <!-- ===============================================
        CTF SCOREBOARD OVERLAY

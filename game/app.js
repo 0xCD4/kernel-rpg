@@ -246,9 +246,6 @@ const state = {
   ctf: {
     timer: 0,
     timerInterval: null,
-    flagCaptured: false,
-    decodeDone: false,
-    decodeOpen: false,
     flagsCollected: [],
     totalStartTime: 0,
     levelStartTime: 0,
@@ -263,7 +260,7 @@ function setStatus(msg) {
 }
 
 function overlayLocked() {
-  return !panicOverlay.classList.contains('hidden') || state.dialogOpen || state.terminalOpen || state.bonusOpen || state.ctf.decodeOpen || !lcOverlay.classList.contains('hidden') || !flagOverlay.classList.contains('hidden');
+  return !panicOverlay.classList.contains('hidden') || state.dialogOpen || state.terminalOpen || state.bonusOpen || !lcOverlay.classList.contains('hidden') || !flagOverlay.classList.contains('hidden');
 }
 
 function renderList(container, items) {
@@ -855,7 +852,6 @@ function updateMission(key, done = true) {
 function isWalkable(tile) {
   if (tile === TILE.WALL) return false;
   if (tile === TILE.GATE && !state.gateOpen) return false;
-  if (tile === CTF_TILE.FIREWALL) return false;
   return true;
 }
 
@@ -970,43 +966,7 @@ function drawTile(x, y, tile) {
       ['..111..', '.12221.', '1222221', '1233321', '1233321', '.12221.', '..111..'],
       { 1: '#1a2535', 2: '#78dbff', 3: '#d8f8ff' }
     );
-  } else if (tile === CTF_TILE.FLAG) {
-    drawCtfFlagTile(px, py, size);
-  } else if (tile === CTF_TILE.DECRYPT) {
-    drawCtfDecryptTile(px, py, size);
   }
-}
-
-/* -- CTF Flag Tile -- */
-function drawCtfFlagTile(px, py, size) {
-  const pulse = 0.6 + Math.sin(Date.now() * 0.005) * 0.3;
-  ctx.save();
-  ctx.globalAlpha = pulse;
-  drawPixelSprite(px, py, size,
-    ['..111..', '..1221.', '..1221.', '..1111.', '..1....', '..1....', '..1....'],
-    { 1: '#333', 2: '#ff4466' }
-  );
-  ctx.restore();
-  // Red glow
-  ctx.save();
-  ctx.globalAlpha = 0.08 + Math.sin(Date.now() * 0.003) * 0.04;
-  ctx.fillStyle = '#ff4466';
-  ctx.beginPath();
-  ctx.ellipse(px + size / 2, py + size / 2, size * 0.6, size * 0.6, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-/* -- CTF Decrypt Terminal Tile -- */
-function drawCtfDecryptTile(px, py, size) {
-  const pulse = 0.5 + Math.sin(Date.now() * 0.004 + 1) * 0.3;
-  ctx.save();
-  ctx.globalAlpha = pulse;
-  drawPixelSprite(px, py, size,
-    ['.11111.', '1222221', '1233321', '1234321', '1233321', '1222221', '.11111.'],
-    { 1: '#2a1a3a', 2: '#aa44ff', 3: '#cc88ff', 4: '#ffffff' }
-  );
-  ctx.restore();
 }
 
 /* -- Tux Linux Penguin (Player) - Walk Animation -- */
@@ -1148,15 +1108,6 @@ function draw() {
         ctx.fillStyle = theme.floor;
         ctx.fillRect(bpx, bpy, sz, sz);
         drawBonusTile(bpx, bpy, sz);
-      } else if (tile === CTF_TILE.FLAG || tile === CTF_TILE.DECRYPT) {
-        const theme = THEMES[state.theme];
-        const sz = state.tileSize;
-        const tpx = state.mapOffsetX + x * sz;
-        const tpy = state.mapOffsetY + y * sz;
-        ctx.fillStyle = theme.floor;
-        ctx.fillRect(tpx, tpy, sz, sz);
-        if (tile === CTF_TILE.FLAG) drawCtfFlagTile(tpx, tpy, sz);
-        else drawCtfDecryptTile(tpx, tpy, sz);
       } else {
         drawTile(x, y, tile);
       }
@@ -1479,7 +1430,7 @@ function keyboardHandler(event) {
   else if (key === 'i') { event.preventDefault(); setStatus('Roadmap: Mentor > Diagnosis > Patch > Gate > Exit'); }
   else if (key === 'h') {
     event.preventDefault();
-    const level = LEVELS[state.levelIndex];
+    const level = state.gameMode === 'ctf' ? CTF_LEVELS[state.levelIndex] : LEVELS[state.levelIndex];
     setStatus(`Hint: ${state.diagnosisDone ? level.patch.hint : level.diagnosis.hint}`);
   } else if (key === 'r') { event.preventDefault(); initLevel(); }
   else if (key === 'escape') {
@@ -1625,15 +1576,6 @@ const flagValue = document.getElementById('flag-value');
 const flagBonusEl = document.getElementById('flag-bonus');
 const flagContinue = document.getElementById('flag-continue');
 
-const decodeOverlay = document.getElementById('decode-overlay');
-const decodeTitle = document.getElementById('decode-title');
-const decodeText = document.getElementById('decode-text');
-const decodeCode = document.getElementById('decode-code');
-const decodeInput = document.getElementById('decode-input');
-const decodeFeedback = document.getElementById('decode-feedback');
-const decodeSubmit = document.getElementById('decode-submit');
-const decodeClose = document.getElementById('decode-close');
-
 const ctfScoreOverlay = document.getElementById('ctf-scoreboard-overlay');
 const ctfScoreTitle = document.getElementById('ctf-score-title');
 const ctfTotalFlags = document.getElementById('ctf-total-flags');
@@ -1657,9 +1599,17 @@ function showModeSelect() {
   modeOverlay.classList.remove('hidden');
 }
 
+const trainingInstrOverlay = document.getElementById('training-instructions-overlay');
+const trainingInstrStart = document.getElementById('training-instr-start');
+
 modeTraining.addEventListener('click', () => {
-  state.gameMode = 'training';
   modeOverlay.classList.add('hidden');
+  trainingInstrOverlay.classList.remove('hidden');
+});
+
+trainingInstrStart.addEventListener('click', () => {
+  trainingInstrOverlay.classList.add('hidden');
+  state.gameMode = 'training';
   gameRoot.classList.remove('hidden');
   gameSubtitle.textContent = 'kernel incident training ground';
   hudTimer.classList.add('hidden');
@@ -1670,11 +1620,19 @@ modeTraining.addEventListener('click', () => {
   initLevel();
 });
 
+const ctfInstrOverlay = document.getElementById('ctf-instructions-overlay');
+const ctfInstrStart = document.getElementById('ctf-instr-start');
+
 modeCtf.addEventListener('click', () => {
-  state.gameMode = 'ctf';
   modeOverlay.classList.add('hidden');
+  ctfInstrOverlay.classList.remove('hidden');
+});
+
+ctfInstrStart.addEventListener('click', () => {
+  ctfInstrOverlay.classList.add('hidden');
+  state.gameMode = 'ctf';
   gameRoot.classList.remove('hidden');
-  gameSubtitle.textContent = 'capture the flag mode';
+  gameSubtitle.textContent = 'operation ring-zero // CTF mode';
   hudTimer.classList.remove('hidden');
   hudFlags.classList.remove('hidden');
   state.levelIndex = 0;
@@ -1716,17 +1674,13 @@ function ctfInitLevel() {
   particles.length = 0;
 
   /* CTF-specific resets */
-  state.ctf.flagCaptured = false;
-  state.ctf.decodeDone = false;
-  state.ctf.decodeOpen = false;
   state.ctf.timer = level.timeLimit;
   state.ctf.levelStartTime = Date.now();
 
   state.mission = [
     { key: 'mentor', text: 'Read the CTF briefing from mentor', done: false },
-    { key: 'diag', text: 'Solve the challenge terminal', done: false },
-    { key: 'flag', text: 'Find and capture the hidden flag', done: false },
-    { key: 'decode', text: 'Decode the flag at the decrypt terminal', done: false },
+    { key: 'diag', text: 'Diagnose the vulnerability', done: false },
+    { key: 'patch', text: 'Fix the kernel code to earn the flag', done: false },
     { key: 'gate', text: 'Exit through the opened gate', done: false },
   ];
 
@@ -1741,7 +1695,7 @@ function ctfInitLevel() {
 
   /* Update UI */
   ctfUpdateHud();
-  setStatus(`[CTF ${level.id}] ${level.title} -- Time: ${formatTime(state.ctf.timer)} -- Find the flag!`);
+  setStatus(`[CTF ${level.id}] ${level.title} -- Time: ${formatTime(state.ctf.timer)} -- Fix the code to earn the flag!`);
   renderAll();
   draw();
 }
@@ -1784,7 +1738,7 @@ function ctfUpdateHud() {
   const level = ctfCurrentLevel();
   hudLevel.innerHTML = `<span class="stat-icon">⚑</span> CTF: ${level.id} / ${total}`;
   hudXp.innerHTML = `<span class="stat-icon">⬡</span> XP: ${state.xp}`;
-  hudAttempts.innerHTML = `<span class="stat-icon">⟳</span> Attempts: ${state.attemptsUsed}`;
+  hudAttempts.innerHTML = `<span class="stat-icon">⟳</span> Attempts: ${state.attemptsUsed}/${level.patch.attempts}`;
 }
 
 function formatTime(seconds) {
@@ -1793,25 +1747,28 @@ function formatTime(seconds) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-/* CTF Flag Capture */
+/* CTF Flag Capture - called after successful patch */
 function ctfCaptureFlag() {
   const level = ctfCurrentLevel();
-  state.ctf.flagCaptured = true;
-  state.map[state.player.y][state.player.x] = TILE.FLOOR;
-  updateMission('flag', true);
+  updateMission('patch', true);
 
   const xpBonus = Math.max(50, Math.floor(state.ctf.timer * 2));
   state.xp += xpBonus;
   state.levelXpGained += xpBonus;
 
+  state.patchDone = true;
+  state.gateOpen = true;
+
   playSfx('correct');
+  playSfx('gate');
   const fpx = state.mapOffsetX + state.player.x * state.tileSize + state.tileSize / 2;
   const fpy = state.mapOffsetY + state.player.y * state.tileSize + state.tileSize / 2;
   spawnParticles(fpx, fpy, 25, '#ff4466', 3);
   spawnParticles(fpx, fpy, 15, '#44ff44', 2);
+  spawnParticles(fpx, fpy, 20, '#5ce29d', 3);
 
   /* Show flag overlay */
-  flagTitle.textContent = `FLAG ${level.id} CAPTURED`;
+  flagTitle.textContent = `FLAG ${level.id} EARNED`;
   flagValue.textContent = level.flag;
   flagBonusEl.textContent = `+${xpBonus} XP (time bonus: ${state.ctf.timer}s remaining)`;
   flagOverlay.classList.remove('hidden');
@@ -1825,73 +1782,13 @@ function ctfCaptureFlag() {
   });
 
   ctfUpdateHud();
-  setStatus(`[FLAG] ${level.flag} -- Captured! Now decode it at the decrypt terminal.`);
+  setStatus(`[FLAG] ${level.flag} -- Code fixed! Gate is open -- proceed to the exit.`);
   draw();
 }
 
 flagContinue.addEventListener('click', () => {
   flagOverlay.classList.add('hidden');
 });
-
-/* CTF Decode Terminal */
-function ctfOpenDecode() {
-  const level = ctfCurrentLevel();
-  const payload = level.decode;
-  decodeTitle.textContent = payload.title;
-  decodeText.textContent = payload.question;
-  decodeCode.textContent = payload.code;
-  decodeInput.value = '';
-  decodeInput.placeholder = 'type your answer...';
-  decodeFeedback.textContent = '';
-  state.ctf.decodeOpen = true;
-  decodeOverlay.classList.remove('hidden');
-  decodeInput.focus();
-}
-
-function ctfSubmitDecode() {
-  const level = ctfCurrentLevel();
-  const payload = level.decode;
-  const valid = checkAnswer(decodeInput.value, payload.answers);
-
-  state.attemptsUsed += 1;
-
-  if (!valid) {
-    decodeFeedback.textContent = `Wrong answer. Hint: ${payload.hint}`;
-    playSfx('wrong');
-    if (state.attemptsUsed >= 3) {
-      ctfCloseDecode();
-      triggerPatchPanic();
-    }
-    return;
-  }
-
-  state.xp += payload.xp;
-  state.levelXpGained += payload.xp;
-  state.ctf.decodeDone = true;
-  state.gateOpen = true;
-  updateMission('decode', true);
-  playSfx('correct');
-  playSfx('gate');
-
-  const gpx = state.mapOffsetX + state.player.x * state.tileSize + state.tileSize / 2;
-  const gpy = state.mapOffsetY + state.player.y * state.tileSize + state.tileSize / 2;
-  spawnParticles(gpx, gpy, 25, '#aa44ff', 3);
-  spawnParticles(gpx, gpy, 15, '#5ce29d', 2);
-
-  ctfCloseDecode();
-  setStatus('[+] Flag decoded! Gate is open -- proceed to the exit.');
-  ctfUpdateHud();
-  draw();
-}
-
-function ctfCloseDecode() {
-  state.ctf.decodeOpen = false;
-  decodeOverlay.classList.add('hidden');
-}
-
-decodeSubmit.addEventListener('click', ctfSubmitDecode);
-decodeClose.addEventListener('click', ctfCloseDecode);
-decodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') ctfSubmitDecode(); });
 
 /* CTF Level Transition */
 function ctfNextLevelOrWin() {
@@ -2010,32 +1907,30 @@ renderAll = function ctfRenderAll() {
 
     hudLevel.innerHTML = `<span class="stat-icon">⚑</span> CTF: ${level.id} / ${CTF_LEVELS.length}`;
     hudXp.innerHTML = `<span class="stat-icon">⬡</span> XP: ${state.xp}`;
-    hudAttempts.innerHTML = `<span class="stat-icon">⟳</span> Attempts: ${state.attemptsUsed}`;
+    hudAttempts.innerHTML = `<span class="stat-icon">⟳</span> Attempts: ${state.attemptsUsed}/${level.patch.attempts}`;
 
     const objective = state.gateOpen
-      ? 'Gate is open, go to exit node'
+      ? 'Flag earned! Go to exit node'
       : !state.mentorDone
         ? 'Read the CTF briefing'
         : !state.diagnosisDone
-          ? 'Solve the challenge terminal'
-          : !state.ctf.flagCaptured
-            ? 'Find the hidden flag in the maze'
-            : !state.ctf.decodeDone
-              ? 'Decode the flag at the decrypt terminal'
-              : 'Proceed to exit';
+          ? 'Diagnose the vulnerability'
+          : !state.patchDone
+            ? 'Fix the kernel code at the patch terminal'
+            : 'Proceed to exit';
 
-    operatorStatus.textContent = state.gateOpen ? 'Flag decoded' : 'CTF active';
+    operatorStatus.textContent = state.gateOpen ? 'Flag earned' : 'CTF active';
     operatorPosition.textContent = `(${state.player.x}, ${state.player.y})`;
     operatorObjective.textContent = objective;
 
-    incidentTitle.textContent = level.title;
-    incidentDesc.textContent = level.briefing;
-    incidentTrace.textContent = `Time: ${formatTime(state.ctf.timer)} | Flag: ${state.ctf.flagCaptured ? 'Captured' : 'Hidden'}`;
+    incidentTitle.textContent = `${level.title} [${level.difficulty}/5]`;
+    incidentDesc.textContent = level.incident;
+    incidentTrace.textContent = level.trace;
 
     themePreview.textContent = `Active theme: ${THEMES[state.theme].name}`;
     themeSelect.value = state.theme;
 
-    renderList(lessonList, level.hints);
+    renderList(lessonList, level.lesson);
 
     missionList.innerHTML = '';
     state.mission.forEach((m) => {
@@ -2069,7 +1964,7 @@ initLevel = function modeAwareInitLevel() {
   origInitLevel();
 };
 
-/* Override for CTF mentor: use briefing text and challenge terminal instead of diag/patch */
+/* Override for CTF: same flow as training (M→D→P→G) but flag earned on patch success */
 const origInteract = interact;
 interact = function modeAwareInteract() {
   if (state.gameMode === 'ctf') {
@@ -2083,8 +1978,8 @@ interact = function modeAwareInteract() {
       updateMission('mentor', true);
       state.xp += 18;
       state.levelXpGained += 18;
-      openDialog('CTF Briefing', level.briefing, `Target: ${level.title}\nTime Limit: ${level.timeLimit}s\nFlag Format: flag{...}`, 'ctf@ring0', 'system');
-      setStatus('[+] CTF briefing received. Solve the challenge terminal next.');
+      openDialog('CTF Briefing', level.mentorText, `Target: ${level.title}\nDifficulty: ${level.difficulty}/5\nTime Limit: ${level.timeLimit}s\nFlag Format: flag{...}`, 'ctf@ring0', 'system');
+      setStatus('[+] CTF briefing received. Go to the diagnosis terminal next.');
       draw();
       return;
     }
@@ -2094,8 +1989,7 @@ interact = function modeAwareInteract() {
         setStatus('[!] Read the CTF briefing first.');
         return;
       }
-      /* Use challenge terminal for CTF */
-      const payload = level.challenge;
+      const payload = level.diagnosis;
       state.terminalType = 'diag';
       terminalTitle.textContent = payload.title;
       terminalText.textContent = payload.question;
@@ -2109,7 +2003,25 @@ interact = function modeAwareInteract() {
       return;
     }
 
-    /* CTF uses the challenge as diag, and decode as the "patch" equivalent */
+    if (tile === TILE.PATCH && !state.patchDone) {
+      if (!state.diagnosisDone) {
+        setStatus('[!] Complete the diagnosis step first, then fix the code.');
+        return;
+      }
+      const payload = level.patch;
+      state.terminalType = 'patch';
+      terminalTitle.textContent = payload.title;
+      terminalText.textContent = payload.question;
+      terminalCode.textContent = payload.code;
+      terminalInput.value = '';
+      terminalInput.placeholder = 'Type your answer...';
+      terminalFeedback.textContent = '';
+      state.terminalOpen = true;
+      terminalOverlay.classList.remove('hidden');
+      terminalInput.focus();
+      return;
+    }
+
     if (tile === TILE.CONCEPT) {
       level.concepts.forEach((c) => state.concepts.add(c));
       state.map[y][x] = TILE.FLOOR;
@@ -2131,52 +2043,67 @@ interact = function modeAwareInteract() {
       ctfNextLevelOrWin();
       return;
     }
-
-    if (tile === CTF_TILE.FLAG && !state.ctf.flagCaptured) {
-      ctfCaptureFlag();
-      return;
-    }
-
-    if (tile === CTF_TILE.DECRYPT && !state.ctf.decodeDone) {
-      if (!state.ctf.flagCaptured) {
-        setStatus('[!] Find and capture the flag first.');
-        return;
-      }
-      ctfOpenDecode();
-      return;
-    }
     return;
   }
   origInteract();
 };
 
-/* Override CTF terminal submit for challenge answers */
+/* Override CTF terminal submit for diagnosis and patch answers */
 const origSubmitTerminal = submitTerminal;
 submitTerminal = function modeAwareSubmitTerminal() {
-  if (state.gameMode === 'ctf' && state.terminalType === 'diag') {
+  if (state.gameMode === 'ctf') {
     const level = ctfCurrentLevel();
-    const payload = level.challenge;
-    const valid = checkAnswer(terminalInput.value, payload.answers);
+    if (!state.terminalType) return;
 
-    if (!valid) {
-      terminalFeedback.textContent = `Wrong answer. Hint: ${payload.hint}`;
-      playSfx('wrong');
+    if (state.terminalType === 'diag') {
+      const payload = level.diagnosis;
+      const valid = checkAnswer(terminalInput.value, payload.answers);
+
+      if (!valid) {
+        terminalFeedback.textContent = `Wrong answer. Hint: ${payload.hint}`;
+        playSfx('wrong');
+        return;
+      }
+
+      state.xp += payload.xp;
+      state.levelXpGained += payload.xp;
+      playSfx('correct');
+      const pcx = state.mapOffsetX + state.player.x * state.tileSize + state.tileSize / 2;
+      const pcy = state.mapOffsetY + state.player.y * state.tileSize + state.tileSize / 2;
+      spawnParticles(pcx, pcy, 15, '#57d7c8', 2);
+
+      state.diagnosisDone = true;
+      updateMission('diag', true);
+      setStatus('[+] Diagnosis complete! Now go to the patch terminal and fix the code.');
+      closeTerminal();
+      ctfUpdateHud();
+      draw();
       return;
     }
 
-    state.xp += payload.xp;
-    state.levelXpGained += payload.xp;
-    playSfx('correct');
-    const pcx = state.mapOffsetX + state.player.x * state.tileSize + state.tileSize / 2;
-    const pcy = state.mapOffsetY + state.player.y * state.tileSize + state.tileSize / 2;
-    spawnParticles(pcx, pcy, 15, '#57d7c8', 2);
+    if (state.terminalType === 'patch') {
+      const payload = level.patch;
+      const valid = checkAnswer(terminalInput.value, payload.answers);
+      state.attemptsUsed += 1;
 
-    state.diagnosisDone = true;
-    updateMission('diag', true);
-    setStatus('[+] Challenge solved! Now find the hidden flag in the maze.');
-    closeTerminal();
-    ctfUpdateHud();
-    draw();
+      if (!valid) {
+        terminalFeedback.textContent = `Wrong answer. Hint: ${payload.hint}`;
+        playSfx('wrong');
+        if (state.attemptsUsed >= payload.attempts) {
+          closeTerminal();
+          triggerPatchPanic();
+        }
+        ctfUpdateHud();
+        return;
+      }
+
+      /* Patch successful - earn the flag! */
+      state.xp += payload.xp;
+      state.levelXpGained += payload.xp;
+      closeTerminal();
+      ctfCaptureFlag();
+      return;
+    }
     return;
   }
   origSubmitTerminal();
@@ -2185,9 +2112,6 @@ submitTerminal = function modeAwareSubmitTerminal() {
 /* Escape key handler for CTF overlays */
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
-    if (state.ctf.decodeOpen) {
-      ctfCloseDecode();
-    }
     if (!flagOverlay.classList.contains('hidden')) {
       flagOverlay.classList.add('hidden');
     }

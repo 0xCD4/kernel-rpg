@@ -672,112 +672,134 @@ const LEVELS = [
 ];
 
 /* ═══════════════════════════════════════════════
-   CTF MODE - CAPTURE THE FLAG LEVELS
+   CTF MODE - "OPERATION RING-ZERO"
+   A coordinated kernel attack investigation.
+   Each level represents a stage of a real APT attack.
+   Based on real CVEs and kernel security incidents.
+   Same tiles as training: M D P K G E B
    ═══════════════════════════════════════════════ */
-
-const CTF_TILE = {
-  ...TILE,
-  FLAG: 9,
-  DECRYPT: 10,
-  FIREWALL: 11,
-};
-
-const CTF_CHAR_TO_TILE = {
-  ...CHAR_TO_TILE,
-  F: CTF_TILE.FLAG,
-  X: CTF_TILE.DECRYPT,
-  W: CTF_TILE.FIREWALL,
-};
 
 const CTF_LEVELS = [
   /* ===============================================
-     CTF 1: Memory Forensics
+     CTF 1: Heap Overflow - Initial Access
+     Real-world: CVE-2021-22555 (Netfilter)
+     Difficulty: 1/5
      =============================================== */
   {
     id: 1,
-    title: 'CTF-01: Memory Forensics',
-    briefing: 'A compromised server has been captured for analysis. Extract the flag hidden in the memory dump. The attacker left traces in the kernel heap.',
-    flag: 'flag{kmalloc_slab_f0r3ns1cs}',
+    title: 'CTF-01: Heap Overflow [CVE-2021-22555]',
+    incident: 'Heap buffer overflow in Netfilter setsockopt handler allows arbitrary kernel write.',
+    trace: 'BUG: KASAN: slab-out-of-bounds in xt_compat_target_from_user+0x4f/0x350 [nf_tables]',
+    flag: 'flag{k3rn3l_h34p_0verfl0w_pwn3d}',
     timeLimit: 180,
-    hints: [
-      'The SLAB allocator leaves patterns in freed objects.',
-      'Use volatility or crash to inspect kmem_cache structures.',
-      'The flag is encoded in the freed slab object metadata.',
+    difficulty: 1,
+    mentorText:
+      'Welcome to Operation Ring-Zero! You are investigating a real kernel attack chain. ' +
+      'Stage 1: Initial Access. This is based on CVE-2021-22555, a Netfilter heap overflow. ' +
+      'In July 2021, a researcher earned $10,000 from Google\'s kCTF bounty program by exploiting this bug. ' +
+      'The vulnerability was in the Netfilter compat setsockopt handler: user-supplied data was copied ' +
+      'into a kernel heap buffer with memcpy, without checking the size parameter. This let an unprivileged ' +
+      'user overflow the heap buffer and achieve arbitrary code execution in Ring-0. ' +
+      'The fix is fundamental: never use memcpy for user pointers. The kernel has copy_from_user ' +
+      'which validates the source address and handles page faults safely. ' +
+      'Diagnose the root cause, then patch the code to earn your first flag!',
+    lesson: [
+      'CVE-2021-22555: Netfilter heap overflow, $10,000 kCTF bounty.',
+      'memcpy on __user pointers = no bounds check, no access validation.',
+      'copy_from_user verifies the pointer and returns -EFAULT on failure.',
+      'This bug class still accounts for ~30% of all kernel CVEs.',
     ],
-    challenge: {
-      title: 'FORENSICS TERMINAL',
-      question: 'Analyze the memory dump. What tool is used to examine Linux kernel memory structures offline?',
-      code: 'file memdump.raw\n# ELF 64-bit LSB core file\n# -> kernel crash dump format\n\n??? -f memdump.raw linux_pslist',
-      answers: ['volatility', 'vol', 'vol.py', 'volatility3'],
-      hint: 'The Python-based memory forensics framework.',
-      xp: 200,
+    diagnosis: {
+      title: 'CVE Analysis: Heap Overflow Root Cause',
+      question: 'Examine the vulnerable Netfilter handler. What critical validation is missing before the memcpy?',
+      code: '/* net/netfilter/x_tables.c - VULNERABLE */\nint xt_compat_target_from_user(\n    struct xt_entry_target *t,\n    void __user *src, unsigned int size)\n{\n    char buf[XT_ALIGN(sizeof(*t))];\n    /* BUG: size from user, no bounds check! */\n    memcpy(buf, src, size);\n    return xt_check_target(t, buf, size);\n}',
+      answers: ['bounds check', 'size check', 'length check', 'validation', 'input validation', 'size validation', 'length validation', 'buffer size'],
+      hint: 'The user controls the "size" parameter but the kernel buffer has a fixed size. What check is needed?',
+      xp: 80,
     },
-    decode: {
-      title: 'DECODE TERMINAL',
-      question: 'The flag is XOR-encoded in the slab cache. What is the typical XOR key size used in simple kernel rootkit obfuscation?',
-      code: 'struct hidden_data {\n    char flag[32];\n    uint8_t xor_key;\n};\n// key = 0x??  (single byte)',
-      answers: ['1 byte', '1', 'single byte', '8 bit', '8 bits'],
-      hint: 'Simple XOR uses a single byte key (0x00-0xFF).',
-      xp: 300,
+    patch: {
+      title: 'Patch: Safe User-to-Kernel Copy [kernel/nf_tables]',
+      question: 'Replace the unsafe memcpy with the kernel\'s safe copy function for user-to-kernel transfers.',
+      code: '/* net/netfilter/x_tables.c - PATCHED */\nint xt_compat_target_from_user(\n    struct xt_entry_target *t,\n    void __user *src, unsigned int size)\n{\n    char buf[XT_ALIGN(sizeof(*t))];\n    if (size > sizeof(buf))\n        return -EINVAL;\n    if (___(buf, src, size))\n        return -EFAULT;\n    return xt_check_target(t, buf, size);\n}',
+      answers: ['copy_from_user'],
+      hint: 'The kernel function that safely copies data FROM user space. It validates the source pointer and handles faults.',
+      xp: 150,
+      attempts: 3,
     },
-    concepts: ['memory forensics', 'SLAB cache', 'volatility framework'],
+    concepts: ['copy_from_user', 'heap overflow', 'KASAN', 'CVE-2021-22555'],
     maze: [
       '###########################',
-      '#M......#.....#...........#',
-      '#.......#.....#...........#',
-      '#..###..#..##.#...####....#',
-      '#..#.......#......#.......#',
-      '#..#.......#......#.......#',
-      '#..####........##.#..###..#',
-      '#..........X..............#',
+      '#M......#........#........#',
+      '#.......#........#........#',
+      '#..###..#..####..#..###...#',
+      '#..#.......#........#.....#',
+      '#..#.......#........#.....#',
+      '#..####.......####..#..##.#',
+      '#..........D..............#',
       '#..........#..............#',
       '#..####....#...####..####.#',
       '#..#.......#.......#......#',
       '#..#..K....#.......#......#',
       '#..#.......#..####.#..###.#',
-      '#..####....#..#........D..#',
+      '#..####....#..#........P..#',
       '#..........#..#...........#',
       '#..###..####..#..####..##.#',
       '#..........#.....#........#',
       '#..........#.....#..G.....#',
       '#..####....#..####........#',
-      '#..........F...#.......B..#',
+      '#..............#.......B..#',
       '#..............#......E...#',
       '###########################',
     ],
   },
 
   /* ===============================================
-     CTF 2: Kernel Exploit Analysis
+     CTF 2: Use-After-Free - Persistence
+     Real-world: CVE-2023-0266 (ALSA)
+     Difficulty: 2/5
      =============================================== */
   {
     id: 2,
-    title: 'CTF-02: Kernel Exploit Dev',
-    briefing: 'A zero-day kernel exploit was found in the wild. Reverse engineer the exploit payload and find the flag hidden in the shellcode.',
-    flag: 'flag{r0p_cha1n_k3rn3l_pwn}',
-    timeLimit: 210,
-    hints: [
-      'The exploit uses Return-Oriented Programming (ROP).',
-      'Check the gadget chain for the commit_creds(prepare_kernel_cred(0)) pattern.',
-      'The flag is assembled from ROP gadget addresses.',
+    title: 'CTF-02: Use-After-Free [CVE-2023-0266]',
+    incident: 'Use-after-free in ALSA PCM driver allows persistent kernel-level access.',
+    trace: 'BUG: KASAN: use-after-free in snd_pcm_hw_params+0xa8/0x4e0 [snd_pcm]',
+    flag: 'flag{null_p0inter_k1lls_uaf}',
+    timeLimit: 200,
+    difficulty: 2,
+    mentorText:
+      'Stage 2: Persistence. The attacker now uses a Use-After-Free to maintain kernel access. ' +
+      'This is based on CVE-2023-0266 in the ALSA sound subsystem, disclosed in January 2023. ' +
+      'The bug was actively exploited in the wild as part of a Samsung Android exploit chain. ' +
+      'The pattern is classic: a driver frees a struct with kfree_skb() but does not NULL the pointer. ' +
+      'Later code dereferences the stale pointer, which now points to recycled SLAB memory. ' +
+      'Since the SLUB allocator reuses freed areas for new objects, the attacker can perform ' +
+      'a heap spray to control what data occupies that memory -- leading to type confusion ' +
+      'and arbitrary code execution. The fix is one of the oldest rules in kernel programming: ' +
+      'always NULL your pointers after free. This prevents the stale pointer from being usable.',
+    lesson: [
+      'CVE-2023-0266: ALSA UAF, exploited in-the-wild on Android.',
+      'SLAB/SLUB allocator reuses freed memory for new objects.',
+      'Dangling pointer + heap spray = type confusion attack.',
+      'Rule: always set pointer = NULL immediately after kfree().',
     ],
-    challenge: {
-      title: 'EXPLOIT ANALYSIS TERMINAL',
-      question: 'What kernel function is called to escalate privileges to root in a typical kernel exploit?',
-      code: 'void *cred = prepare_kernel_cred(0);\n???(cred);\n// uid=0(root) gid=0(root)',
-      answers: ['commit_creds'],
-      hint: 'The function that applies a new credential set to the current task.',
-      xp: 250,
+    diagnosis: {
+      title: 'CVE Analysis: UAF Exploitation Pattern',
+      question: 'The driver frees skb->head with kfree_skb, but later code still reads through it. What vulnerability class is this?',
+      code: '/* sound/core/pcm_native.c - VULNERABLE */\nstatic void snd_pcm_release_substream(\n    struct snd_pcm_substream *sub)\n{\n    kfree_skb(sub->runtime->dma_buf);\n    /* BUG: pointer not cleared! */\n    /* ... later in another thread ... */\n    memcpy(dest, sub->runtime->dma_buf->data,\n        sub->runtime->frame_bytes);  /* UAF! */\n}',
+      answers: ['use after free', 'uaf', 'use-after-free', 'dangling pointer'],
+      hint: 'The memory at dma_buf was freed, but the pointer still holds the old address. Accessing freed memory is...',
+      xp: 100,
     },
-    decode: {
-      title: 'SHELLCODE TERMINAL',
-      question: 'In a ROP chain, what structure holds the saved return addresses on the kernel stack?',
-      code: '// Stack layout:\n// [rbp+0x00] saved_rbp\n// [rbp+0x08] return_addr  <-- gadget 1\n// [rbp+0x10] return_addr  <-- gadget 2\n// This structure is called the ???',
-      answers: ['stack frame', 'call stack', 'stack'],
-      hint: 'The data structure that stores function return addresses.',
-      xp: 350,
+    patch: {
+      title: 'Patch: Prevent Dangling Pointer [sound/core/pcm]',
+      question: 'After freeing the DMA buffer, what must the pointer be set to in order to prevent reuse?',
+      code: '/* sound/core/pcm_native.c - PATCHED */\nstatic void snd_pcm_release_substream(\n    struct snd_pcm_substream *sub)\n{\n    kfree_skb(sub->runtime->dma_buf);\n    sub->runtime->dma_buf = ___;\n    /* Now any later access will trigger\n       a clean NULL-deref instead of UAF */\n}',
+      answers: ['NULL', 'null', '0'],
+      hint: 'The universal sentinel value that marks a pointer as "no longer valid".',
+      xp: 200,
+      attempts: 3,
     },
-    concepts: ['ROP chains', 'commit_creds', 'kernel stack exploitation'],
+    concepts: ['use-after-free', 'SLAB recycling', 'heap spray', 'CVE-2023-0266'],
     maze: [
       '###########################',
       '#M.........#..............#',
@@ -786,55 +808,73 @@ const CTF_LEVELS = [
       '#.....#....#....#.........#',
       '#.....#.........#.........#',
       '####..#..####...#...#####.#',
-      '#.........#..X..#.........#',
+      '#.........#..D..#.........#',
       '#.........#.....#.........#',
       '#..####...#.....####..###.#',
       '#..#......#..........#....#',
       '#..#......#....K.....#....#',
       '#..#...####..........#....#',
       '#..#......#...####...#....#',
-      '#.........#...#....D......#',
-      '#..####...#...#...........#',
+      '#.........#...#...........#',
+      '#..####...#...#..P........#',
       '#..#..........#...........#',
       '#..#..........#...####....#',
       '#..####..####.#......#....#',
-      '#............G#..F...#....#',
+      '#............G#......#....#',
       '#.............#...B..#..E.#',
       '###########################',
     ],
   },
 
   /* ===============================================
-     CTF 3: Rootkit Detection
+     CTF 3: Race Condition - Lateral Movement
+     Real-world: CVE-2016-5195 (Dirty COW)
+     Difficulty: 3/5
      =============================================== */
   {
     id: 3,
-    title: 'CTF-03: Rootkit Hunter',
-    briefing: 'Intelligence reports a kernel rootkit on the target server. Find the hidden kernel module, analyze its hooks, and extract the flag from its encrypted config.',
-    flag: 'flag{ftrac3_h00k_d3t3ct0r}',
+    title: 'CTF-03: Race Condition [Dirty COW]',
+    incident: 'IRQ-level race condition corrupts block device ring buffer data.',
+    trace: 'lockdep: possible recursive lock in blk_mq_dispatch_rq+0x2c0 [nvme]\nWARNING: lock held when returning to user space!',
+    flag: 'flag{sp1n_l0ck_1rqsav3_r4c3}',
     timeLimit: 240,
-    hints: [
-      'Hidden modules are removed from the module list but still in memory.',
-      'Check /sys/module/ vs lsmod output for discrepancies.',
-      'The rootkit config is stored in a proc entry with a random name.',
+    difficulty: 3,
+    mentorText:
+      'Stage 3: Lateral Movement. The attacker exploits a race condition. ' +
+      'This is inspired by the legendary Dirty COW bug (CVE-2016-5195) -- a race condition ' +
+      'in the Linux memory subsystem that existed for NINE YEARS before being found in 2016. ' +
+      'Two threads racing between a Copy-On-Write fault and madvise(MADV_DONTNEED) could ' +
+      'overwrite ANY read-only file on the system, including /etc/passwd. ' +
+      'In this challenge, you have a block device driver where the IRQ handler and the ' +
+      'process context both touch the same ring buffer. The critical question: ' +
+      'why can\'t you use a mutex in interrupt context? Because mutexes can sleep! ' +
+      'In IRQ context, calling schedule() would deadlock the entire CPU. ' +
+      'You need spin_lock_irqsave -- it disables local IRQs and saves the flags register, ' +
+      'so the critical section cannot be interrupted by the same IRQ on the same CPU.',
+    lesson: [
+      'CVE-2016-5195 (Dirty COW): 9-year-old race, overwrites read-only files.',
+      'In IRQ context: no sleeping, no schedule(), no mutex_lock().',
+      'spin_lock_irqsave: disables IRQs + saves flags + acquires lock.',
+      'spin_unlock_irqrestore: releases lock + restores saved IRQ state.',
     ],
-    challenge: {
-      title: 'ROOTKIT DETECTION TERMINAL',
-      question: 'What /proc file shows all currently loaded kernel modules?',
-      code: 'cat /proc/???\n# Lists all loaded kernel modules\n# Compare with lsmod output for hidden modules',
-      answers: ['modules', '/proc/modules'],
-      hint: 'The proc file that lists every loaded module.',
-      xp: 220,
+    diagnosis: {
+      title: 'CVE Analysis: Why Mutex Fails in IRQ',
+      question: 'The block driver IRQ handler uses mutex_lock to protect shared state. Why does this cause a kernel hang?',
+      code: '/* drivers/block/nvme-ring.c - VULNERABLE */\nstatic irqreturn_t nvme_irq_handler(\n    int irq, void *data)\n{\n    struct nvme_dev *dev = data;\n    /* BUG: mutex can sleep! */\n    mutex_lock(&dev->ring_lock);\n    dev->ring[dev->head++ % RING_SIZE] = readl(\n        dev->mmio + NVME_CQ_HEAD);\n    mutex_unlock(&dev->ring_lock);\n    return IRQ_HANDLED;\n}',
+      answers: ['mutex can sleep', 'sleep', 'cannot sleep in irq', 'sleeping in irq', 'scheduling', 'schedule'],
+      hint: 'mutex_lock may internally call schedule(). What is forbidden in interrupt/atomic context?',
+      xp: 130,
     },
-    decode: {
-      title: 'MODULE ANALYSIS TERMINAL',
-      question: 'What is the kernel function that hides a module from the module list?',
-      code: 'static int __init rootkit_init(void) {\n    // Hide this module\n    ???(&THIS_MODULE->list);\n    return 0;\n}',
-      answers: ['list_del', 'list_del_init'],
-      hint: 'The linked-list function that removes a node from a doubly-linked list.',
-      xp: 380,
+    patch: {
+      title: 'Patch: IRQ-Safe Locking [drivers/block/nvme]',
+      question: 'Replace the mutex with the correct IRQ-safe spinlock that saves and restores interrupt flags.',
+      code: '/* drivers/block/nvme-ring.c - PATCHED */\nstatic irqreturn_t nvme_irq_handler(\n    int irq, void *data)\n{\n    struct nvme_dev *dev = data;\n    unsigned long flags;\n    ___(&dev->ring_lock, flags);\n    dev->ring[dev->head++ % RING_SIZE] = readl(\n        dev->mmio + NVME_CQ_HEAD);\n    spin_unlock_irqrestore(\n        &dev->ring_lock, flags);\n    return IRQ_HANDLED;\n}',
+      answers: ['spin_lock_irqsave'],
+      hint: 'The spinlock variant that takes a flags parameter and disables local interrupts.',
+      xp: 300,
+      attempts: 2,
     },
-    concepts: ['hidden kernel modules', '/proc/modules', 'list manipulation'],
+    concepts: ['spin_lock_irqsave', 'Dirty COW', 'IRQ context', 'race condition'],
     maze: [
       '###########################',
       '#M.....#..................#',
@@ -843,55 +883,73 @@ const CTF_LEVELS = [
       '#..#####...#........#.....#',
       '#..........#........#.....#',
       '#..........#...####.#..##.#',
-      '#..####....#.......X#.....#',
+      '#..####....#.......D#.....#',
       '#..#.......#.........#....#',
       '#..#....####..####...#....#',
       '#..#.......#..#......#....#',
       '#..........#..#..K...#....#',
       '#..####....#..#......#....#',
       '#..........#..####...#....#',
-      '#..........#........D.....#',
+      '#..........#..............#',
       '#..####..###...####.......#',
-      '#..#.......#...#..........#',
+      '#..#.......#...#..P.......#',
       '#..#.......#...#..........#',
       '#..#.......#...####...###.#',
-      '#..........#.......F.G....#',
+      '#..........#..........G...#',
       '#..........#......B..#..E.#',
       '###########################',
     ],
   },
 
   /* ===============================================
-     CTF 4: Network Stack Capture
+     CTF 4: eBPF Privilege Escalation
+     Real-world: CVE-2021-3490
+     Difficulty: 4/5
      =============================================== */
   {
     id: 4,
-    title: 'CTF-04: Packet Capture',
-    briefing: 'A covert channel was detected in the kernel network stack. The attacker is exfiltrating data through ICMP echo packets. Capture and decode the flag from the packet payloads.',
-    flag: 'flag{1cmp_c0v3rt_ch4nn3l}',
-    timeLimit: 200,
-    hints: [
-      'ICMP echo request payloads can carry hidden data.',
-      'The netfilter hook at NF_INET_PRE_ROUTING captures all incoming packets.',
-      'Each ICMP packet payload contains one character of the flag.',
+    title: 'CTF-04: eBPF Exploit [CVE-2021-3490]',
+    incident: 'eBPF ALU32 bounds tracking bypass leads to kernel memory read/write.',
+    trace: 'SECURITY: bpf_prog_load: verifier bypass detected (CVE-2021-3490)\nEACCES: R0 unbounded after ALU32 bitwise op',
+    flag: 'flag{ebpf_c4p_bpf_g4tek33per}',
+    timeLimit: 270,
+    difficulty: 4,
+    mentorText:
+      'Stage 4: Privilege Escalation. The attacker uses eBPF to gain root. ' +
+      'This is based on CVE-2021-3490 -- a critical bug in the eBPF verifier\'s ALU32 bounds tracking. ' +
+      'The eBPF verifier is supposed to be the ultimate gatekeeper: it statically analyzes every ' +
+      'instruction of a BPF program BEFORE it runs in the kernel. It checks for infinite loops, ' +
+      'invalid memory access, and stack overflow. But CVE-2021-3490 found a blind spot: after certain ' +
+      'ALU32 bitwise operations (AND, OR, XOR), the verifier lost track of register value bounds. ' +
+      'An attacker could craft a BPF program that the verifier THOUGHT was safe, ' +
+      'but at runtime could read and write arbitrary kernel memory. ' +
+      'Google Project Zero and ZDI rated this critical. Multiple exploit chains were published. ' +
+      'The defense in depth fix: ensure only privileged users (with CAP_BPF or CAP_SYS_ADMIN) ' +
+      'can load BPF programs at all. This is the capability gate that limits the attack surface.',
+    lesson: [
+      'CVE-2021-3490: eBPF verifier ALU32 bounds bypass (Critical).',
+      'The verifier does static analysis of every BPF instruction pre-load.',
+      'CAP_BPF (since Linux 5.8) limits who can load BPF programs.',
+      'Defense in depth: capability check + verifier + JIT hardening.',
     ],
-    challenge: {
-      title: 'PACKET CAPTURE TERMINAL',
-      question: 'What netfilter hook point catches packets before routing decisions?',
-      code: 'static struct nf_hook_ops nfho = {\n    .hook     = capture_func,\n    .pf       = PF_INET,\n    .hooknum  = ???,\n    .priority = NF_IP_PRI_FIRST,\n};',
-      answers: ['NF_INET_PRE_ROUTING', 'PRE_ROUTING'],
-      hint: 'The first hook point in the netfilter chain.',
-      xp: 280,
+    diagnosis: {
+      title: 'CVE Analysis: eBPF Verifier Bypass',
+      question: 'What kernel component performs static analysis on eBPF programs before allowing them to run?',
+      code: '/* kernel/bpf/syscall.c */\nstatic int bpf_prog_load(union bpf_attr *attr)\n{\n    struct bpf_prog *prog;\n    prog = bpf_prog_alloc(bpf_prog_size(\n        attr->insn_cnt), GFP_USER);\n    /* This component checks every insn */\n    err = bpf_check(&prog, attr, uattr);\n    if (err < 0)\n        goto free_prog;  /* REJECTED */\n    /* ... JIT compile and attach ... */\n}',
+      answers: ['verifier', 'ebpf verifier', 'bpf verifier', 'bpf_check'],
+      hint: 'It runs at load time doing static analysis. The function name bpf_check is a hint.',
+      xp: 160,
     },
-    decode: {
-      title: 'DECODE CHANNEL TERMINAL',
-      question: 'What is the ICMP type number for echo request (ping)?',
-      code: 'struct icmphdr *icmp = icmp_hdr(skb);\nif (icmp->type == ???) {\n    // Extract hidden data from payload\n    extract_covert_data(skb);\n}',
-      answers: ['8', 'ICMP_ECHO', '0x08'],
-      hint: 'The type field value for a ping request packet.',
-      xp: 320,
+    patch: {
+      title: 'Patch: BPF Capability Gate [kernel/bpf/syscall.c]',
+      question: 'Complete the capability check that prevents unprivileged users from loading eBPF programs.',
+      code: '/* kernel/bpf/syscall.c - PATCHED */\nstatic int bpf_prog_load(\n    union bpf_attr *attr, bpfptr_t uattr)\n{\n    if (!___(CAP_BPF) &&\n        !capable(CAP_SYS_ADMIN))\n        return -EPERM;\n\n    if (attr->insn_cnt > BPF_MAXINSNS)\n        return -E2BIG;\n\n    return __bpf_prog_load(attr, uattr);\n}',
+      answers: ['capable', 'ns_capable'],
+      hint: 'The kernel function that checks if the current task has a specific Linux capability (CAP_*).',
+      xp: 400,
+      attempts: 2,
     },
-    concepts: ['netfilter hooks', 'ICMP covert channels', 'packet inspection'],
+    concepts: ['eBPF verifier', 'CAP_BPF', 'ALU32 bounds', 'CVE-2021-3490'],
     maze: [
       '###########################',
       '#M........#...............#',
@@ -900,16 +958,16 @@ const CTF_LEVELS = [
       '#..#..........#...........#',
       '#..#..........#...........#',
       '#..#...####...#..####.....#',
-      '#......#..X...#..#........#',
+      '#......#..D...#..#........#',
       '#......#......#..#........#',
       '#..#####......#..#..####..#',
       '#.........#...#...........#',
       '#.........#...#...........#',
       '#..####...#...#..####.....#',
       '#..#......#......#..K.....#',
-      '#..#......#......#....D...#',
+      '#..#......#......#........#',
       '#..#...####...####..####..#',
-      '#..........#..........F...#',
+      '#..........#..........P...#',
       '#..........#..............#',
       '#..####....#....####......#',
       '#..........#........G.....#',
@@ -919,36 +977,56 @@ const CTF_LEVELS = [
   },
 
   /* ===============================================
-     CTF 5: Privilege Escalation Chain
+     CTF 5: Container Escape via cgroups
+     Real-world: CVE-2022-0492
+     Difficulty: 5/5
      =============================================== */
   {
     id: 5,
-    title: 'CTF-05: Privesc Chain',
-    briefing: 'The final challenge. Chain multiple kernel vulnerabilities together: a race condition, a UAF bug, and a namespace escape. Capture the root flag from the host namespace.',
-    flag: 'flag{full_k3rn3l_ch41n_r00t}',
+    title: 'CTF-05: Container Escape [CVE-2022-0492]',
+    incident: 'Container escape via cgroups release_agent allows host-level code execution.',
+    trace: 'SECURITY: cgroup_release_agent write from non-init namespace (CVE-2022-0492)\nALERT: unshare(CLONE_NEWUSER) from container PID 1',
+    flag: 'flag{s3ccomp_c0nta1ner_br34k0ut}',
     timeLimit: 300,
-    hints: [
-      'Step 1: Win the race condition to corrupt the refcount.',
-      'Step 2: Trigger UAF to overwrite cred structure.',
-      'Step 3: Escape the namespace using the forged credentials.',
+    difficulty: 5,
+    mentorText:
+      'Final stage: Container Escape! The attacker breaks out to the host. ' +
+      'This is based on CVE-2022-0492 -- disclosed in February 2022. ' +
+      'The bug was elegant: cgroups v1 has a feature called release_agent that executes a binary ' +
+      'on the HOST when a cgroup becomes empty. An attacker inside a container could write to ' +
+      'the release_agent file and trigger code execution as root on the host system. ' +
+      'Docker, Kubernetes, LXC -- over 75% of cloud containers were vulnerable. ' +
+      'The first step of most container escape chains is calling unshare(CLONE_NEWUSER) to create ' +
+      'a new user namespace and gain fake root capabilities inside it. ' +
+      'Your mission: write a seccomp-BPF filter that blocks the unshare syscall. ' +
+      'Seccomp filters run in the kernel and intercept syscalls BEFORE they execute. ' +
+      'The BPF filter program loads the syscall number, compares it to __NR_unshare, ' +
+      'and returns SECCOMP_RET_KILL to block it. All other syscalls must pass through. ' +
+      'Complete the filter. This is what real-world container hardening looks like.',
+    lesson: [
+      'CVE-2022-0492: cgroups release_agent container escape.',
+      'unshare(CLONE_NEWUSER) is the first step in most container escapes.',
+      'Seccomp-BPF filters block syscalls at the kernel level.',
+      'SECCOMP_RET_KILL blocks, SECCOMP_RET_ALLOW permits syscalls.',
     ],
-    challenge: {
-      title: 'EXPLOIT CHAIN TERMINAL',
-      question: 'In the Linux kernel, what structure holds the security credentials (uid, gid, capabilities) of a process?',
-      code: 'struct task_struct {\n    ...\n    const struct ??? *cred;\n    ...\n};',
-      answers: ['cred', 'cred_struct'],
-      hint: 'The structure name that is also the field name in task_struct.',
-      xp: 350,
+    diagnosis: {
+      title: 'CVE Analysis: Container Escape Entry Point',
+      question: 'What syscall does the attacker call to create a new user namespace and gain capabilities inside the container?',
+      code: '/* Attacker code inside container: */\n#define _GNU_SOURCE\n#include <sched.h>\n\nint main(void) {\n    /* Step 1: create new user namespace */\n    if (???(CLONE_NEWUSER) == -1)\n        perror("namespace");\n    /* Step 2: now have CAP_SYS_ADMIN in\n       new namespace, mount cgroup,\n       write release_agent, escape! */\n    return exploit_cgroup_release();\n}',
+      answers: ['unshare', '__NR_unshare'],
+      hint: 'This syscall detaches the calling process from one or more namespaces. Starts with "un"...',
+      xp: 200,
     },
-    decode: {
-      title: 'ROOT CAPTURE TERMINAL',
-      question: 'After overwriting the cred structure, what uid value gives you root access?',
-      code: 'struct cred *new = prepare_kernel_cred(NULL);\nnew->uid = KUIDT_INIT(???);\nnew->gid = KGIDT_INIT(???);\ncommit_creds(new);',
-      answers: ['0'],
-      hint: 'The numeric user ID of the root user on Linux.',
+    patch: {
+      title: 'Patch: Seccomp-BPF Syscall Filter [container hardening]',
+      question: 'Complete the seccomp return value that allows all NON-blocked syscalls to execute normally.',
+      code: '/* Container seccomp policy - PATCHED */\nstruct sock_filter filter[] = {\n    /* Load syscall number */\n    BPF_STMT(BPF_LD | BPF_W | BPF_ABS,\n        offsetof(struct seccomp_data, nr)),\n    /* Jump if nr == __NR_unshare */\n    BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K,\n        __NR_unshare, 0, 1),\n    /* Block: kill process on unshare */\n    BPF_STMT(BPF_RET | BPF_K,\n        SECCOMP_RET_KILL),\n    /* Allow: permit all other syscalls */\n    BPF_STMT(BPF_RET | BPF_K, ___),\n};',
+      answers: ['SECCOMP_RET_ALLOW'],
+      hint: 'The seccomp return action that permits the syscall to proceed. Opposite of SECCOMP_RET_KILL.',
       xp: 500,
+      attempts: 2,
     },
-    concepts: ['race condition', 'cred structure', 'full exploit chain'],
+    concepts: ['seccomp-bpf', 'container escape', 'CVE-2022-0492', 'CLONE_NEWUSER'],
     maze: [
       '###########################',
       '#M........#...............#',
@@ -957,20 +1035,707 @@ const CTF_LEVELS = [
       '#..#..........#...........#',
       '#..#..........#...........#',
       '#..#...####...#...####....#',
-      '#......#..X...#...#.......#',
+      '#......#..D...#...#.......#',
       '#......#......#...#.......#',
       '#..#####......#...#..###..#',
       '#.........#...#...........#',
       '#.........#...#....K......#',
       '#..####...#...#...........#',
-      '#..#......#......####..D..#',
+      '#..#......#......####.....#',
       '#..#......#......#........#',
       '#..#...####...####..####..#',
+      '#..........#..........P...#',
       '#..........#..............#',
-      '#..........#..........F...#',
       '#..####....#....####......#',
       '#..........#........G.....#',
       '#..........#....B....#..E.#',
+      '###########################',
+    ],
+  },
+  /* ===============================================
+     CTF 6: Dirty Pipe — Data Exfiltration
+     Real-world: CVE-2022-0847
+     Difficulty: 2/5
+     =============================================== */
+  {
+    id: 6,
+    title: 'CTF-06: Dirty Pipe [CVE-2022-0847]',
+    incident: 'Unprivileged process overwrites read-only files via stale pipe buffer flags.',
+    trace: 'WARNING: pipe_write: page cache overwrite from unprivileged context\nBUG: stale PIPE_BUF_FLAG_CAN_MERGE in copy_page_to_iter_pipe+0x38',
+    flag: 'flag{d1rty_p1pe_pag3_cach3}',
+    timeLimit: 200,
+    difficulty: 2,
+    mentorText:
+      'Stage 6: Data Exfiltration. The attacker is rewriting sensitive files without write permission. ' +
+      'This is CVE-2022-0847, "Dirty Pipe" -- discovered by Max Kellermann in February 2022 ' +
+      'while debugging corrupted gzip access logs from a customer support ticket. ' +
+      'The bug is deceptively simple: when a new pipe_buffer is allocated in copy_page_to_iter_pipe() ' +
+      'and push_pipe(), the "flags" field is never initialized to zero. ' +
+      'The attack: (1) fill a pipe with write() calls -- this sets PIPE_BUF_FLAG_CAN_MERGE on every buffer, ' +
+      '(2) drain the pipe -- the stale flags remain on the ring entries, ' +
+      '(3) splice() a read-only file\'s page into the pipe -- the page cache entry inherits the stale CAN_MERGE flag, ' +
+      '(4) write() to the pipe -- the kernel sees CAN_MERGE and merges your data directly into the file\'s page cache! ' +
+      'It even works on immutable files and CD-ROM mounts. The fix is literally one line: buf->flags = 0. ' +
+      'A single uninitialized struct member caused one of the most impactful Linux vulns in years. ' +
+      'Often compared to Dirty COW, but far easier to exploit -- no race condition needed!',
+    lesson: [
+      'CVE-2022-0847 (Dirty Pipe): overwrites ANY read-only file without permissions.',
+      'pipe_buffer.flags must be initialized -- stale PIPE_BUF_FLAG_CAN_MERGE is the root cause.',
+      'splice() shares pages by reference (zero-copy) between files and pipes.',
+      'One uninitialized struct member = full system compromise. Always init your structs.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Dirty Pipe Root Cause',
+      question: 'splice() shares file data with pipes using zero-copy page references. What kernel subsystem stores file contents in memory and gets corrupted by this bug?',
+      code: '/* lib/iov_iter.c - VULNERABLE */\nstatic size_t copy_page_to_iter_pipe(\n    struct page *page, size_t offset,\n    size_t bytes, struct iov_iter *i)\n{\n    struct pipe_buffer *buf;\n    buf = pipe_head_buf(pipe);\n    buf->ops = &page_cache_pipe_buf_ops;\n    /* BUG: buf->flags NOT initialized! */\n    /* Stale CAN_MERGE from prior write() */\n    /* splice() page cache entry gets the */\n    /* stale flag => write() corrupts it! */\n    get_page(page);\n    buf->page = page;\n}',
+      answers: ['page cache', 'pagecache', 'page_cache'],
+      hint: 'The kernel caches file contents in memory so they can be read without disk I/O. splice() inserts a reference to this cache into the pipe.',
+      xp: 100,
+    },
+    patch: {
+      title: 'Patch: Initialize Pipe Buffer [lib/iov_iter.c]',
+      question: 'Which pipe_buffer struct member must be initialized to zero to prevent the stale CAN_MERGE flag from persisting?',
+      code: '/* lib/iov_iter.c - PATCHED */\nstatic size_t copy_page_to_iter_pipe(\n    struct page *page, size_t offset,\n    size_t bytes, struct iov_iter *i)\n{\n    struct pipe_buffer *buf;\n    buf = pipe_head_buf(pipe);\n    buf->ops = &page_cache_pipe_buf_ops;\n    buf->___ = 0; /* FIX: clear stale flags */\n    get_page(page);\n    buf->page = page;\n}',
+      answers: ['flags'],
+      hint: 'The struct member that contains PIPE_BUF_FLAG_CAN_MERGE. Starts with "f".',
+      xp: 200,
+      attempts: 3,
+    },
+    concepts: ['PIPE_BUF_FLAG_CAN_MERGE', 'page cache', 'splice()', 'CVE-2022-0847'],
+    maze: [
+      '###########################',
+      '#M........#...............#',
+      '#.........#...............#',
+      '#..####...#...####........#',
+      '#..#..........#...........#',
+      '#..#..........#...........#',
+      '#..#...####...#...####....#',
+      '#......#......#...#...D...#',
+      '#......#......#...#.......#',
+      '#..#####..........#..###..#',
+      '#..........#..............#',
+      '#..........#......K.......#',
+      '#..####....#..............#',
+      '#..#.......#....####..##..#',
+      '#..#.......#....#.........#',
+      '#..#...........P#.........#',
+      '#..####..####..#..........#',
+      '#..........#...####..####.#',
+      '#..........#............G.#',
+      '#..####....#..............#',
+      '#..........#.....B....#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 7: nf_tables Double-Free — Firewall Subversion
+     Real-world: CVE-2024-1086
+     Difficulty: 3/5
+     =============================================== */
+  {
+    id: 7,
+    title: 'CTF-07: Double-Free [CVE-2024-1086]',
+    incident: 'nf_tables verdict confusion causes skb double-free, allowing arbitrary kernel write.',
+    trace: 'BUG: KASAN: double-free in nf_hook_slow+0x1a4/0x250 [nf_tables]\nWARNING: NF_DROP verdict with positive errno interpreted as NF_ACCEPT',
+    flag: 'flag{nft_v3rd1ct_d0ubl3_fr33}',
+    timeLimit: 240,
+    difficulty: 3,
+    mentorText:
+      'Stage 7: Firewall Subversion. The attacker manipulates the packet filtering engine itself. ' +
+      'This is CVE-2024-1086, codenamed "Flipping Pages" -- a critical nf_tables vulnerability ' +
+      'that lurked for nearly a DECADE (since February 2014!) before being found. ' +
+      'The researcher "Notselwyn" published an exploit in March 2024 with a 99.4% success rate ' +
+      'that works across kernels v5.14 to v6.6 without recompilation. ' +
+      'The bug: nft_verdict_init() applies NF_VERDICT_MASK to verdict codes in the default case. ' +
+      'An attacker crafts an NF_DROP verdict with a positive errno value that, after masking, ' +
+      'looks like NF_ACCEPT (value 1). The packet\'s skb is freed by the NF_DROP path, ' +
+      'then ALSO processed by the NF_ACCEPT path -- a classic double-free. ' +
+      'CISA added this to their Known Exploited Vulnerabilities catalog. ' +
+      'Google kCTF bounties for such exploits range from $31,337 to $133,337! ' +
+      'The fix: reject verdict parameters for NF_DROP and NF_QUEUE entirely.',
+    lesson: [
+      'CVE-2024-1086: nf_tables verdict confusion, 10-year-old bug, 99.4% exploit success rate.',
+      'NF_VERDICT_MASK on user input can transform NF_DROP into NF_ACCEPT.',
+      'Double-free: skb freed by DROP path, then used again by ACCEPT path.',
+      'Fix: strict input validation -- reject unexpected verdict parameters with -EINVAL.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Verdict Confusion',
+      question: 'An NF_DROP verdict frees the skb, but a positive errno makes it also get processed as NF_ACCEPT. What bug class results from the same object being freed twice?',
+      code: '/* net/netfilter/nf_tables_api.c - VULNERABLE */\nstatic int nft_verdict_init(const struct nft_ctx *ctx,\n    struct nft_data *data, ...)\n{\n    /* ... */\n    default:\n        switch (data->verdict.code & NF_VERDICT_MASK) {\n        case NF_ACCEPT: /* BUG: NF_DROP with positive\n             errno 1 gets masked to NF_ACCEPT! */\n        case NF_DROP:\n        case NF_QUEUE:\n            break;\n        }\n}\n/* Result: skb freed by DROP, then used by ACCEPT */\n/* => double-free in nf_hook_slow() */  ',
+      answers: ['double free', 'double-free', 'doublefree'],
+      hint: 'The skb is freed once by the DROP handler, and freed again when processed as ACCEPT. Same memory freed two times...',
+      xp: 130,
+    },
+    patch: {
+      title: 'Patch: Strict Verdict Validation [net/netfilter/nf_tables_api.c]',
+      question: 'Complete the return value that rejects invalid verdict parameters before they can cause confusion.',
+      code: '/* net/netfilter/nf_tables_api.c - PATCHED */\nstatic int nft_verdict_init(...)\n{\n    switch (data->verdict.code) {\n    case NF_ACCEPT:\n    case NF_DROP:\n    case NF_QUEUE:\n        /* FIX: reject any parameters */\n        if (desc->len != 0)\n            return ___;\n        break;\n    case NFT_CONTINUE:\n    case NFT_BREAK:\n    case NFT_RETURN:\n        break;\n    default:\n        return -EINVAL;\n    }\n}',
+      answers: ['-EINVAL', 'EINVAL'],
+      hint: 'The kernel error code for "Invalid argument". Negative of EINVAL.',
+      xp: 300,
+      attempts: 2,
+    },
+    concepts: ['NF_VERDICT_MASK', 'double-free', 'nf_tables', 'CVE-2024-1086'],
+    maze: [
+      '###########################',
+      '#M.......#................#',
+      '#........#................#',
+      '#..####..#.....####..##...#',
+      '#..#...........#..........#',
+      '#..#...........#..........#',
+      '#..####..####..#...####...#',
+      '#........#.....#...#..D...#',
+      '#........#.....#...#......#',
+      '#..####..#.........#..###.#',
+      '#..#.....#...#............#',
+      '#..#.....#...#....K.......#',
+      '#..#.....#...#............#',
+      '#..####......####..####...#',
+      '#............#............#',
+      '#..####..#...#.....P......#',
+      '#..#.....#...#............#',
+      '#..#.....#...####..####...#',
+      '#..####..#...........#..G.#',
+      '#........#...............B#',
+      '#........#............#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 8: StackRot — Memory Corruption
+     Real-world: CVE-2023-3269
+     Difficulty: 4/5
+     =============================================== */
+  {
+    id: 8,
+    title: 'CTF-08: StackRot [CVE-2023-3269]',
+    incident: 'Use-after-free-by-RCU in maple tree during stack VMA expansion.',
+    trace: 'BUG: KASAN: use-after-free in mas_walk+0x178/0x350 [mm]\nWARNING: expand_downwards: maple tree node freed under RCU while mm read-locked',
+    flag: 'flag{st4ckr0t_mmap_wr1t3_l0ck}',
+    timeLimit: 270,
+    difficulty: 4,
+    mentorText:
+      'Stage 8: Memory Corruption. The attacker exploits a race in the memory manager itself. ' +
+      'This is CVE-2023-3269, "StackRot" -- discovered by Ruihan Li at Peking University in June 2023. ' +
+      'In Linux 6.1, VMA (Virtual Memory Area) management was migrated from red-black trees to ' +
+      'maple trees -- an RCU-safe B-tree data structure. But the locking was not updated to match! ' +
+      'When a process accesses below its stack (MAP_GROWSDOWN), the kernel calls expand_downwards() ' +
+      'to grow the stack VMA. This modifies the maple tree, potentially replacing nodes. ' +
+      'Old nodes are freed via RCU callbacks. The critical bug: VMA access only holds the mm READ lock, ' +
+      'not a WRITE lock. RCU callbacks can fire at any time, freeing the old maple node ' +
+      'while other threads still have pointers to it. This is a use-after-free-by-RCU. ' +
+      'Linus Torvalds personally led the two-week fix effort. His solution: upgrade to mmap_write_lock ' +
+      'when stack expansion is needed. This was the first proof that UAFBR bugs are exploitable!',
+    lesson: [
+      'CVE-2023-3269 (StackRot): first proven use-after-free-by-RCU exploit.',
+      'Maple trees replaced red-black trees for VMA management in Linux 6.1.',
+      'expand_downwards() modifies the tree, so a READ lock is insufficient.',
+      'Fix: use mmap_write_lock when stack expansion is needed.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Lock Semantics Mismatch',
+      question: 'expand_downwards() modifies the maple tree under the mm read lock. RCU frees old nodes while readers hold stale pointers. What lock type should be held instead?',
+      code: '/* mm/mmap.c + arch/x86/mm/fault.c - VULNERABLE */\nstatic void __do_page_fault(\n    struct pt_regs *regs, unsigned long addr)\n{\n    struct mm_struct *mm = current->mm;\n    /* BUG: only holds READ lock */\n    mmap_read_lock(mm);\n    vma = find_vma(mm, addr);\n    if (vma->vm_flags & VM_GROWSDOWN) {\n        /* expand_downwards modifies maple tree!\n           Old nodes freed via RCU callback.\n           Other readers see stale pointers => UAF */\n        expand_stack(vma, addr);\n    }\n    mmap_read_unlock(mm);\n}',
+      answers: ['write lock', 'write', 'mmap_write_lock', 'write_lock'],
+      hint: 'If a function modifies a data structure, readers are not enough. You need exclusive access.',
+      xp: 160,
+    },
+    patch: {
+      title: 'Patch: Write Lock for Stack Expansion [mm/memory.c]',
+      question: 'Complete the lock function that provides exclusive access to the mm before expanding the stack.',
+      code: '/* mm/memory.c - PATCHED (Linus Torvalds) */\nstruct vm_area_struct *lock_mm_and_find_vma(\n    struct mm_struct *mm, unsigned long addr,\n    struct pt_regs *regs)\n{\n    struct vm_area_struct *vma;\n    /* FIX: upgrade to exclusive lock */\n    ___(mm);\n    vma = find_vma(mm, addr);\n    if (vma && (vma->vm_flags & VM_GROWSDOWN))\n        expand_stack(vma, addr);\n    return vma;\n}',
+      answers: ['mmap_write_lock'],
+      hint: 'The mm locking function that provides exclusive (write) access. mmap_???_lock.',
+      xp: 400,
+      attempts: 2,
+    },
+    concepts: ['RCU', 'maple tree', 'mmap_write_lock', 'CVE-2023-3269'],
+    maze: [
+      '###########################',
+      '#M.........#..............#',
+      '#..........#..............#',
+      '#..####....#...####.......#',
+      '#.....#....#...#..........#',
+      '#.....#........#..........#',
+      '#..####..####..#...####...#',
+      '#........#.....#...#......#',
+      '#........#...D.#...#......#',
+      '#..####..#.........#..###.#',
+      '#..#.........#............#',
+      '#..#.........#......K.....#',
+      '#..#..####...#............#',
+      '#..#.........#...####.....#',
+      '#............#...#........#',
+      '#..####..#...#...#..P.....#',
+      '#..#.....#...#...#........#',
+      '#..#.....#...####.#..####.#',
+      '#..####..#...........#..G.#',
+      '#........#...............B#',
+      '#........#............#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 9: io_uring OOB — Async I/O Weaponization
+     Real-world: CVE-2023-2598
+     Difficulty: 4/5
+     =============================================== */
+  {
+    id: 9,
+    title: 'CTF-09: io_uring OOB [CVE-2023-2598]',
+    incident: 'Buffer registration coalesce optimization allows out-of-bounds physical memory access.',
+    trace: 'BUG: io_uring: bvec length exceeds actual physical pages\nWARNING: io_sqe_buffer_register: coalesced N pages from same folio but only 1 physical page',
+    flag: 'flag{10_ur1ng_pag3_fr4m3_0ob}',
+    timeLimit: 300,
+    difficulty: 4,
+    mentorText:
+      'Stage 9: Async I/O Weaponization. The attacker uses io_uring for kernel memory access. ' +
+      'This is CVE-2023-2598 -- an out-of-bounds physical memory access in io_uring buffer registration. ' +
+      'Google reported that io_uring accounted for 60% of ALL kernel exploit submissions to their kCTF program, ' +
+      'resulting in approximately $1 million in total bounty payouts. They disabled io_uring in ChromeOS and Android! ' +
+      'The bug: io_sqe_buffer_register() has a coalesce optimization -- if multiple user pages ' +
+      'belong to the same folio (e.g. huge pages), they are merged into a single bvec entry. ' +
+      'But the check only verifies page_folio(pages[i]) == folio, NOT that pages are physically consecutive. ' +
+      'An attacker maps the SAME physical page N times via MAP_FIXED on a memfd. The kernel sees N pages ' +
+      'from one folio, creates bvec with size N*PAGE_SIZE, but actual physical memory is only 1 page. ' +
+      'IORING_OP_READ_FIXED then reads N-1 pages beyond the physical buffer -- arbitrary kernel memory read. ' +
+      'The fix: verify pages are physically sequential by comparing their Physical Frame Numbers.',
+    lesson: [
+      'CVE-2023-2598: io_uring OOB, part of $1M in io_uring bounties at Google.',
+      'Folio coalescing assumed consecutive pages, but attacker mapped same page N times.',
+      'page_to_pfn() converts struct page to its Physical Frame Number for contiguity checks.',
+      'Optimization shortcuts in hot paths can create critical security holes.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Phantom Pages',
+      question: 'An attacker maps the same physical page to N virtual addresses. The kernel sees N pages from one folio and creates a bvec of N*PAGE_SIZE. But actual memory is 1 page. What kind of access does this enable?',
+      code: '/* io_uring/rsrc.c - VULNERABLE */\nstatic int io_sqe_buffer_register(...)\n{\n    nr_pages = get_user_pages(ubuf, ...);\n    folio = page_folio(pages[0]);\n    for (i = 0; i < nr_pages; i++) {\n        /* BUG: only checks same folio,\n           NOT physical contiguity! */\n        if (page_folio(pages[i]) != folio)\n            break; /* stop coalescing */\n    }\n    /* Creates bvec with len = i * PAGE_SIZE\n       but physical memory may be just 1 page!\n       IORING_OP_READ_FIXED reads beyond it */\n    bvec_set_page(&imu->bvec[0], pages[0],\n        i * PAGE_SIZE, 0);\n}',
+      answers: ['out of bounds', 'out-of-bounds', 'oob', 'buffer overflow'],
+      hint: 'The bvec says N pages but real memory is 1 page. Reading past the actual buffer boundary is called...',
+      xp: 160,
+    },
+    patch: {
+      title: 'Patch: Physical Contiguity Check [io_uring/rsrc.c]',
+      question: 'Complete the function that converts a struct page to its Physical Frame Number, enabling the contiguity check.',
+      code: '/* io_uring/rsrc.c - PATCHED */\nstatic int io_sqe_buffer_register(...)\n{\n    nr_pages = get_user_pages(ubuf, ...);\n    folio = page_folio(pages[0]);\n    for (i = 1; i < nr_pages; i++) {\n        if (page_folio(pages[i]) != folio ||\n            /* FIX: verify physical contiguity */\n            ___(pages[i]) !=\n            page_to_pfn(pages[i-1]) + 1)\n            break;\n    }\n    bvec_set_page(&imu->bvec[0], pages[0],\n        i * PAGE_SIZE, 0);\n}',
+      answers: ['page_to_pfn'],
+      hint: 'Converts a struct page pointer to its Physical Frame Number. page_to_???.',
+      xp: 400,
+      attempts: 2,
+    },
+    concepts: ['page_to_pfn', 'folio', 'io_uring', 'CVE-2023-2598'],
+    maze: [
+      '###########################',
+      '#M........#...............#',
+      '#.........#...............#',
+      '#..####...#....####..###..#',
+      '#.....#........#..........#',
+      '#.....#........#..........#',
+      '#..####..####..#..####....#',
+      '#........#..D..#..#.......#',
+      '#........#.....#..#.......#',
+      '#..####..#.....#..#..####.#',
+      '#..#.....#..#..#..........#',
+      '#..#..K..#..#..#..........#',
+      '#..#.....#..#..#..####....#',
+      '#..####..#..#.....#.......#',
+      '#........#..#.....#.......#',
+      '#..####..#..#..####..###..#',
+      '#........#.........P......#',
+      '#........#................#',
+      '#..####..####..####..####.#',
+      '#..............#.......G..#',
+      '#.........B....#.......E..#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 10: nf_tables Anonymous Set UAF — Evidence Destruction
+     Real-world: CVE-2023-32233
+     Difficulty: 5/5
+     =============================================== */
+  {
+    id: 10,
+    title: 'CTF-10: nf_tables UAF [CVE-2023-32233]',
+    incident: 'nf_tables batch transaction allows use-after-free on implicitly deleted anonymous sets.',
+    trace: 'BUG: KASAN: use-after-free in nft_set_lookup_global+0x50/0xb0 [nf_tables]\nWARNING: anonymous set accessed after implicit deletion in same batch',
+    flag: 'flag{nft_an0n_s3t_batch_uaf}',
+    timeLimit: 300,
+    difficulty: 5,
+    mentorText:
+      'Final stage: Evidence Destruction. The attacker manipulates nf_tables transactions to cover tracks. ' +
+      'This is CVE-2023-32233 -- a use-after-free in nf_tables batch transaction processing. ' +
+      'Discovered by Patryk Sondej and Piotr Krysiuk, disclosed May 2023. ' +
+      'nf_tables supports atomic batch updates -- multiple operations grouped into one transaction. ' +
+      'The bug: when NFT_MSG_DELRULE is processed, it implicitly deletes any anonymous sets ' +
+      'referenced by the rule\'s expressions. But nf_tables_deactivate_set() does NOT mark ' +
+      'the anonymous set as inactive in the next generation! ' +
+      'A subsequent operation in the SAME batch (like NFT_MSG_DELSETELEM) can still reference ' +
+      'the already-freed anonymous set -- a use-after-free. ' +
+      'Google demonstrated exploitation even with KASLR, hardened SLAB, and Control-Flow Integrity. ' +
+      'The fix by Pablo Neira Ayuso (nf_tables maintainer): check the NFT_SET_ANONYMOUS flag ' +
+      'and deactivate the set during the preparation phase, making it invisible to later batch ops. ' +
+      'Congratulations operator -- this is the hardest challenge. Fix the transaction logic!',
+    lesson: [
+      'CVE-2023-32233: nf_tables anonymous set UAF via batch processing.',
+      'Implicit deletion must propagate state to prevent later batch operations from accessing freed objects.',
+      'NFT_SET_ANONYMOUS flag identifies sets that are bound to a single rule\'s lifetime.',
+      'Generation-based concurrency: objects must be deactivated in the correct generation.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Batch Transaction UAF',
+      question: 'NFT_MSG_DELRULE frees anonymous sets but does not mark them inactive. A later operation in the same batch accesses the freed set. What vulnerability class is this?',
+      code: '/* net/netfilter/nf_tables_api.c - VULNERABLE */\n/* Batch: [ DELRULE(rule_with_anon_set),\n           DELSETELEM(same_anon_set) ] */\n\nstatic void nf_tables_deactivate_set(\n    const struct nft_ctx *ctx,\n    struct nft_set *set, ...)\n{\n    /* BUG: anonymous set NOT deactivated!\n       It remains visible in current generation.\n       DELSETELEM in same batch finds it,\n       but memory was already scheduled for free\n       by nf_tables_commit_release() */\n    set->use--;\n}',
+      answers: ['use after free', 'use-after-free', 'uaf'],
+      hint: 'The anonymous set is freed by DELRULE, then accessed again by DELSETELEM. Accessing memory after it has been freed...',
+      xp: 200,
+    },
+    patch: {
+      title: 'Patch: Deactivate Anonymous Sets [net/netfilter/nf_tables_api.c]',
+      question: 'Complete the flag that identifies anonymous sets so they can be deactivated during the preparation phase.',
+      code: '/* net/netfilter/nf_tables_api.c - PATCHED */\n/* Fix by Pablo Neira Ayuso (nf_tables maintainer) */\nstatic void nf_tables_deactivate_set(\n    const struct nft_ctx *ctx,\n    struct nft_set *set,\n    struct nft_set_binding *binding,\n    enum nft_trans_phase phase)\n{\n    /* FIX: toggle anonymous sets as inactive\n       so later batch ops cannot reference them */\n    if (set->flags & ___)\n        nft_deactivate_next(ctx->net, set);\n    set->use--;\n}',
+      answers: ['NFT_SET_ANONYMOUS'],
+      hint: 'The nft_set flag constant that marks a set as anonymous (bound to a single rule). NFT_SET_???.',
+      xp: 500,
+      attempts: 2,
+    },
+    concepts: ['NFT_SET_ANONYMOUS', 'batch transactions', 'nf_tables', 'CVE-2023-32233'],
+    maze: [
+      '###########################',
+      '#M.......#................#',
+      '#........#................#',
+      '#..####..#....####..####..#',
+      '#..#..........#.......#...#',
+      '#..#..........#.......#...#',
+      '#..#...####...#..####.#...#',
+      '#......#......#......D#...#',
+      '#......#......#..........##',
+      '#..#####......####..####..#',
+      '#..........#..............#',
+      '#..........#......K.......#',
+      '#..####....#..............#',
+      '#..#.......#...####..###..#',
+      '#..#.......#...#..........#',
+      '#..#...........#..P.......#',
+      '#..####..####..#..........#',
+      '#..........#...####..####.#',
+      '#..........#.............G#',
+      '#..####....#..............#',
+      '#..........#......B...#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ═══════════════════════════════════════════════
+     PHASE 3: ZERO-DAY RESPONSE (2025 CVEs)
+     The latest kernel threats. Bleeding-edge exploits.
+     ═══════════════════════════════════════════════ */
+
+  /* ===============================================
+     CTF 11: vsock UAF — VM Escape Vector
+     Real-world: CVE-2025-21756
+     Difficulty: 3/5
+     =============================================== */
+  {
+    id: 11,
+    title: 'CTF-11: vsock UAF [CVE-2025-21756]',
+    incident: 'Use-after-free in vsock transport reassignment allows VM-to-host privilege escalation.',
+    trace: 'BUG: KASAN: slab-use-after-free in vsock_bind+0x88/0x120 [vsock]\nWARNING: vsock_remove_sock: refcount underflow on transport reassignment',
+    flag: 'flag{vs0ck_d3ad_r3fc0unt_uaf}',
+    timeLimit: 240,
+    difficulty: 3,
+    mentorText:
+      'Phase 3: Zero-Day Response! These are 2025 CVEs -- the bleeding edge. ' +
+      'CVE-2025-21756, nicknamed "Attack of the Vsock", was disclosed in February 2025. ' +
+      'vsock (VM Sockets) allows guest-to-host communication in VMware, KVM, and Hyper-V. ' +
+      'The bug: vsock_create() adds the socket to the unbound list (refcnt=2). ' +
+      'During transport reassignment, vsock_remove_sock() unconditionally calls vsock_remove_bound(), ' +
+      'decrementing refcnt to 1. Later, vsock_bind() calls __vsock_remove_bound() again, ' +
+      'dropping refcnt to 0 -- the object is freed! Any subsequent access is a UAF. ' +
+      'Michael Hoefler built a full exploit: heap spray with msg_msg, KASLR bypass via vsock_diag_dump(), ' +
+      'ROP chain to commit_creds(init_cred) for root. His first kernel exploit ever! ' +
+      'The fix: only remove the binding when the socket is actually being destroyed. ' +
+      'Check the SOCK_DEAD flag -- if it is not set, skip the binding removal.',
+    lesson: [
+      'CVE-2025-21756: vsock refcount UAF, full root exploit published.',
+      'vsock_remove_sock() must only unbind during real socket destruction.',
+      'SOCK_DEAD flag distinguishes destruction from transport reassignment.',
+      'sock_orphan() sets SOCK_DEAD -- must be called BEFORE transport->release().',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Refcount Underflow',
+      question: 'vsock_remove_sock() unconditionally calls vsock_remove_bound() during transport reassignment, causing a double refcount decrement. The object is freed while still referenced. What vulnerability class is this?',
+      code: '/* net/vmw_vsock/af_vsock.c - VULNERABLE */\nvoid vsock_remove_sock(struct vsock_sock *vsk)\n{\n    /* BUG: unconditional unbind! */\n    /* During transport reassignment,\n       this drops refcnt incorrectly.\n       Later vsock_bind() drops it to 0\n       => object freed => UAF! */\n    vsock_remove_bound(vsk);\n    vsock_remove_connected(vsk);\n}',
+      answers: ['use after free', 'use-after-free', 'uaf'],
+      hint: 'The socket object is freed (refcnt=0) but still referenced in the bind table. Accessing freed memory is...',
+      xp: 130,
+    },
+    patch: {
+      title: 'Patch: Guard Binding Removal [net/vmw_vsock/af_vsock.c]',
+      question: 'Complete the flag check that ensures binding is only removed during real socket destruction, not transport reassignment.',
+      code: '/* net/vmw_vsock/af_vsock.c - PATCHED */\nvoid vsock_remove_sock(struct vsock_sock *vsk)\n{\n    /* FIX: only remove binding when socket\n       is actually being destroyed */\n    if (sock_flag(sk_vsock(vsk), ___))\n        vsock_remove_bound(vsk);\n    vsock_remove_connected(vsk);\n}',
+      answers: ['SOCK_DEAD'],
+      hint: 'The socket flag that marks a socket as "being destroyed". sock_orphan() sets this flag. SOCK_???.',
+      xp: 300,
+      attempts: 2,
+    },
+    concepts: ['SOCK_DEAD', 'refcount', 'vsock', 'CVE-2025-21756'],
+    maze: [
+      '###########################',
+      '#M........#...............#',
+      '#.........#...............#',
+      '#..####...#....####.......#',
+      '#..#..........#...........#',
+      '#..#..........#...........#',
+      '#..#...####...#..####.....#',
+      '#......#......#..#..D.....#',
+      '#......#......#..#........#',
+      '#..#####......#..#...####.#',
+      '#.........#...#...........#',
+      '#.........#...#..K........#',
+      '#..####...#...#...........#',
+      '#..#......#.......####....#',
+      '#..#......#.......#.......#',
+      '#..#...####...####...###..#',
+      '#..........#.........P....#',
+      '#..........#..............#',
+      '#..####....#.....####.....#',
+      '#..........#.........G....#',
+      '#..........#....B.....#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 12: UNIX Socket OOB — Chrome Sandbox Escape
+     Real-world: CVE-2025-38236
+     Difficulty: 5/5
+     =============================================== */
+  {
+    id: 12,
+    title: 'CTF-12: UNIX OOB UAF [CVE-2025-38236]',
+    incident: 'AF_UNIX MSG_OOB use-after-free enables Chrome renderer sandbox escape to kernel.',
+    trace: 'BUG: KASAN: slab-use-after-free in unix_stream_read_actor+0x3c/0x70 [unix]\nWARNING: consumed OOB skb freed but u->oob_skb still references it',
+    flag: 'flag{un1x_00b_chr0me_3scap3}',
+    timeLimit: 300,
+    difficulty: 5,
+    mentorText:
+      'CVE-2025-38236 -- Jann Horn from Google Project Zero used this to escape from Chrome\'s renderer sandbox ' +
+      'all the way to full kernel control. Published August 2025. ' +
+      'UNIX domain sockets support MSG_OOB (out-of-band) data. When you recv() an OOB byte, ' +
+      'the kernel keeps the consumed skb on the receive queue as a zero-length boundary marker. ' +
+      'The bug: if you send a second OOB byte, the old consumed skb is still on the queue. ' +
+      'When recv(MSG_OOB) processes the new OOB byte, the old skb can be freed via the SO_PEEK_OFF ' +
+      'skip loop (which infinite-loops on zero-length skbs!), but u->oob_skb still references it. ' +
+      'Next recv(MSG_OOB) dereferences the freed skb -- UAF! ' +
+      'Jann Horn built a full exploit from inside Chrome\'s sandbox: one-byte-at-a-time kernel memory read, ' +
+      'arbitrary kernel memory increment, all the way to root. ' +
+      'The fix: when consuming an OOB byte, check if the previous skb on the queue is a stale ' +
+      'zero-length consumed marker. If so, unlink it from the receive queue to prevent accumulation. ' +
+      'CISA added this to their Known Exploited Vulnerabilities catalog.',
+    lesson: [
+      'CVE-2025-38236: AF_UNIX MSG_OOB UAF, Chrome sandbox escape to kernel.',
+      'Consumed OOB skbs with unix_skb_len()==0 must be cleaned up before new OOB arrives.',
+      '__skb_unlink() safely removes an skb from a queue under the queue lock.',
+      'Even unused features (MSG_OOB) in sandboxed code paths can be exploited.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Stale OOB Marker',
+      question: 'recv(MSG_OOB) consumes the OOB skb, but it remains on the queue as a zero-length marker. A second OOB causes the old marker to be freed while u->oob_skb still points to it. What vulnerability class is this?',
+      code: '/* net/unix/af_unix.c - VULNERABLE */\nstatic int unix_stream_recv_urg(\n    struct unix_stream_read_state *state)\n{\n    /* ... */\n    oob_skb = u->oob_skb;\n    if (!(state->flags & MSG_PEEK))\n        WRITE_ONCE(u->oob_skb, NULL);\n    /* BUG: previous consumed OOB skb with\n       unix_skb_len()==0 stays on the queue!\n       When second OOB arrives, the old one\n       is freed but still referenced => UAF */\n    chunk = state->recv_actor(oob_skb, ...);\n    UNIXCB(oob_skb).consumed += 1;\n    consume_skb(oob_skb);\n}',
+      answers: ['use after free', 'use-after-free', 'uaf'],
+      hint: 'The stale consumed skb is freed, but pointers to it remain. Accessing memory that has already been freed...',
+      xp: 200,
+    },
+    patch: {
+      title: 'Patch: Unlink Stale OOB Marker [net/unix/af_unix.c]',
+      question: 'Before freeing the OOB skb, the previous consumed marker must be removed from the receive queue. What kernel function unlinks an skb from a queue?',
+      code: '/* net/unix/af_unix.c - PATCHED */\nstatic int unix_stream_recv_urg(\n    struct unix_stream_read_state *state)\n{\n    struct sk_buff *oob_skb, *read_skb = NULL;\n    /* ... */\n    spin_lock(&sk->sk_receive_queue.lock);\n    oob_skb = u->oob_skb;\n    if (!(state->flags & MSG_PEEK)) {\n        WRITE_ONCE(u->oob_skb, NULL);\n        /* FIX: remove stale consumed OOB skb */\n        if (oob_skb->prev !=\n            (struct sk_buff *)&sk->sk_receive_queue\n            && !unix_skb_len(oob_skb->prev)) {\n            read_skb = oob_skb->prev;\n            ___(read_skb, &sk->sk_receive_queue);\n        }\n    }\n    spin_unlock(&sk->sk_receive_queue.lock);\n    /* ... */\n    consume_skb(read_skb);\n}',
+      answers: ['__skb_unlink'],
+      hint: 'The function that removes an skb from a queue list. Double underscore prefix, skb_unlink.',
+      xp: 500,
+      attempts: 2,
+    },
+    concepts: ['__skb_unlink', 'MSG_OOB', 'AF_UNIX', 'CVE-2025-38236'],
+    maze: [
+      '###########################',
+      '#M.......#................#',
+      '#........#................#',
+      '#..####..#....####..####..#',
+      '#..#..........#.......#...#',
+      '#..#..........#.......#...#',
+      '#..#...####...#..####.....#',
+      '#......#......#......D....#',
+      '#......#......#...........#',
+      '#..#####......####...####.#',
+      '#..........#..............#',
+      '#..........#.....K........#',
+      '#..####....#..............#',
+      '#..#.......#...####..###..#',
+      '#..#.......#...#..........#',
+      '#..#...........#...P......#',
+      '#..####..####..#..........#',
+      '#..........#...####..####.#',
+      '#..........#............G.#',
+      '#..####....#..............#',
+      '#..........#.....B....#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 13: POSIX CPU Timer Race — Racing the Zombie
+     Real-world: CVE-2025-38352
+     Difficulty: 4/5
+     =============================================== */
+  {
+    id: 13,
+    title: 'CTF-13: Timer Race [CVE-2025-38352]',
+    incident: 'TOCTOU race in POSIX CPU timers allows use-after-free on zombie task struct.',
+    trace: 'BUG: KASAN: use-after-free in handle_posix_cpu_timers+0x1f0/0x4a0 [kernel]\nWARNING: k_itimer freed while still on firing list after release_task()',
+    flag: 'flag{z0mb1e_t1mer_ex1t_st4te}',
+    timeLimit: 270,
+    difficulty: 4,
+    mentorText:
+      'CVE-2025-38352, codenamed "Chronomaly" -- a TOCTOU race in POSIX CPU timers, September 2025. ' +
+      'Confirmed exploited in the wild on Android devices. Added to CISA KEV catalog. ' +
+      'The race: (1) A process exits, setting tsk->exit_state = EXIT_ZOMBIE. ' +
+      '(2) A scheduler tick fires, run_posix_cpu_timers() calls handle_posix_cpu_timers(). ' +
+      'It acquires sighand lock, collects firing timers (setting timer->it.cpu.firing = true), ' +
+      'then RELEASES the sighand lock. (3) Now the zombie can be reaped by waitpid() -> release_task(). ' +
+      'The task struct is freed! (4) Meanwhile, another thread calls timer_delete() -> posix_cpu_timer_del(). ' +
+      'It tries lock_task_sighand(tsk) but FAILS because the task is already freed. ' +
+      'It never sees firing==true, so it frees the k_itimer via RCU. ' +
+      '(5) handle_posix_cpu_timers() is still iterating the firing list -- it touches the freed k_itimer. UAF! ' +
+      'The fix is elegant: check tsk->exit_state at the top of run_posix_cpu_timers(). ' +
+      'If the task is a zombie, return immediately. No timer handling = no race window.',
+    lesson: [
+      'CVE-2025-38352: POSIX CPU timer TOCTOU race, exploited on Android in the wild.',
+      'Zombie tasks (exit_state != 0) must not process timers -- they can be reaped at any time.',
+      'The race window opens between unlock_task_sighand() and the firing list iteration.',
+      'Fix: early return if tsk->exit_state is set. One line prevents the entire exploit chain.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Racing the Zombie',
+      question: 'handle_posix_cpu_timers() releases the sighand lock, then iterates the firing list. Meanwhile, release_task() frees the zombie task. posix_cpu_timer_del() misses the firing flag. What type of race vulnerability is this?',
+      code: '/* kernel/time/posix-cpu-timers.c - VULNERABLE */\nvoid run_posix_cpu_timers(void)\n{\n    struct task_struct *tsk = current;\n    /* BUG: no check if task is exiting!\n       If tsk->exit_state == EXIT_ZOMBIE,\n       release_task() can free it while\n       handle_posix_cpu_timers() iterates\n       the firing list => UAF on k_itimer */\n    if (!fastpath_timer_check(tsk))\n        return;\n    __run_posix_cpu_timers(tsk);\n}',
+      answers: ['toctou', 'TOCTOU', 'time of check time of use', 'race condition', 'race'],
+      hint: 'The sighand lock is checked and released, then a concurrent operation invalidates the assumption. Time-of-Check vs Time-of-Use.',
+      xp: 160,
+    },
+    patch: {
+      title: 'Patch: Early Exit for Zombies [kernel/time/posix-cpu-timers.c]',
+      question: 'Complete the task_struct field that must be checked to prevent timer handling on zombie tasks.',
+      code: '/* kernel/time/posix-cpu-timers.c - PATCHED */\nvoid run_posix_cpu_timers(void)\n{\n    struct task_struct *tsk = current;\n    lockdep_assert_irqs_disabled();\n\n    /* FIX: if task is exiting, do not\n       handle timers. release_task() could\n       free the task at any moment. */\n    if (tsk->___)\n        return;\n\n    if (!fastpath_timer_check(tsk))\n        return;\n    __run_posix_cpu_timers(tsk);\n}',
+      answers: ['exit_state'],
+      hint: 'The task_struct field set to EXIT_ZOMBIE or EXIT_DEAD when a process exits. It starts with "exit_".',
+      xp: 400,
+      attempts: 2,
+    },
+    concepts: ['TOCTOU', 'exit_state', 'POSIX timers', 'CVE-2025-38352'],
+    maze: [
+      '###########################',
+      '#M.........#..............#',
+      '#..........#..............#',
+      '#..####....#...####..###..#',
+      '#.....#....#...#..........#',
+      '#.....#........#..........#',
+      '#..####..####..#...####...#',
+      '#........#.........#......#',
+      '#........#..D......#......#',
+      '#..####..#.........#..###.#',
+      '#..#.........#............#',
+      '#..#.........#....K.......#',
+      '#..#..####...#............#',
+      '#..#.........#....####....#',
+      '#............#....#.......#',
+      '#..####..#...#....#..P....#',
+      '#..#.....#...#....#.......#',
+      '#..#.....#...####.#..####.#',
+      '#..####..#............#.G.#',
+      '#........#..............B.#',
+      '#........#............#.E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 14: Rust Binder Race — The First Rust CVE
+     Real-world: CVE-2025-68260
+     Difficulty: 3/5
+     =============================================== */
+  {
+    id: 14,
+    title: 'CTF-14: Rust Binder [CVE-2025-68260]',
+    incident: 'Race condition in Rust Binder driver death_list causes data race and kernel panic.',
+    trace: 'Unable to handle kernel paging request at virtual address 000bb9841bcac70e\nInternal error: Oops: 0000000096000044 [#1] PREEMPT SMP -- rust_binder',
+    flag: 'flag{rust_b1nd3r_p0p_fr0nt}',
+    timeLimit: 240,
+    difficulty: 3,
+    mentorText:
+      'CVE-2025-68260 -- the FIRST CVE ever assigned to Rust code in the Linux kernel! ' +
+      'Reported December 2025 by Greg Kroah-Hartman. ' +
+      'The Rust Binder driver (rust_binder) handles Android IPC. In Node::release(), the code used ' +
+      'mem::take() to move the entire death_list into a local variable, then dropped the lock, ' +
+      'then iterated freely with a for loop. The problem: with intrusive linked lists, ' +
+      'mem::take() moves the list container but individual nodes still have stale prev/next pointers. ' +
+      'Another thread calling remove() on a node follows the stale pointers -- data race! ' +
+      'Rust\'s borrow checker could NOT prevent this because the race happens through unsafe blocks ' +
+      'with incorrect safety invariant comments. The fix is elegant: instead of mem::take() + for loop, ' +
+      'use pop_front() to extract one element at a time while the lock is held. ' +
+      'Drop the lock only for per-element processing, then re-acquire for the next extraction. ' +
+      'This proves that unsafe Rust still needs careful manual review of concurrency invariants.',
+    lesson: [
+      'CVE-2025-68260: first Rust CVE in Linux kernel (Binder driver).',
+      'mem::take() on intrusive lists leaves stale prev/next pointers in nodes.',
+      'pop_front() extracts one item at a time under the lock -- safe pattern.',
+      'Rust\'s borrow checker cannot prevent logic errors inside unsafe blocks.',
+    ],
+    diagnosis: {
+      title: 'CVE Analysis: Intrusive List Data Race',
+      question: 'Node::release() uses mem::take() to move the death_list, drops the lock, then iterates. Another thread calls remove() on a node with stale prev/next pointers. What type of concurrency bug is this?',
+      code: '// drivers/android/binder/node.rs - VULNERABLE\nfn release(self) {\n    // Move entire list into local variable\n    let death_list = core::mem::take(\n        &mut self.inner.access_mut(\n            &mut guard).death_list);\n    drop(guard);  // LOCK RELEASED!\n    // Iterating without the lock...\n    // Another thread calls remove() on nodes\n    // with stale prev/next pointers => RACE!\n    for death in death_list {\n        death.into_arc().set_dead();\n    }\n}',
+      answers: ['data race', 'race condition', 'race', 'data-race'],
+      hint: 'Two threads access the same prev/next pointers without synchronization. One iterates, the other modifies. This is a...',
+      xp: 130,
+    },
+    patch: {
+      title: 'Patch: Safe List Extraction [drivers/android/binder/node.rs]',
+      question: 'Replace mem::take() + for loop with a safe pattern that extracts one element at a time under the lock. What List method removes and returns the first element?',
+      code: '// drivers/android/binder/node.rs - PATCHED\nfn release(self) {\n    // FIX: extract one item at a time\n    // while holding the lock\n    while let Some(death) = self.inner\n        .access_mut(&mut guard)\n        .death_list.___() {\n        drop(guard); // unlock for processing\n        death.into_arc().set_dead();\n        guard = self.owner.inner.lock();\n        // re-acquire lock for next item\n    }\n}',
+      answers: ['pop_front'],
+      hint: 'The standard method to remove and return the first element from a linked list. pop_???.',
+      xp: 300,
+      attempts: 3,
+    },
+    concepts: ['pop_front', 'intrusive list', 'unsafe Rust', 'CVE-2025-68260'],
+    maze: [
+      '###########################',
+      '#M........#...............#',
+      '#.........#...............#',
+      '#..####...#...####..###...#',
+      '#.....#.......#...........#',
+      '#.....#.......#...........#',
+      '#..####..####.#..####..##.#',
+      '#........#....#........D..#',
+      '#........#....#...........#',
+      '#..####..#....####..#####.#',
+      '#..#.....#...........#....#',
+      '#..#..K..#...........#....#',
+      '#..#.....#...####....#....#',
+      '#..####..#...#.......#....#',
+      '#........#...#............#',
+      '#..####..#...#...####..##.#',
+      '#........#.......#..P.....#',
+      '#........#.......#........#',
+      '#..####..####....####..#..#',
+      '#................#....G...#',
+      '#.........B......#.....E..#',
       '###########################',
     ],
   },
@@ -978,7 +1743,7 @@ const CTF_LEVELS = [
 
 function buildLevelMap(level) {
   const points = {};
-  const charMap = level.decode ? CTF_CHAR_TO_TILE : CHAR_TO_TILE;
+  const charMap = CHAR_TO_TILE;
   const rows = level.maze.map((row, y) =>
     row.split('').map((char, x) => {
       const tile = charMap[char] ?? TILE.FLOOR;
@@ -989,9 +1754,6 @@ function buildLevelMap(level) {
       if (char === 'G') points.gate = { x, y };
       if (char === 'E') points.exit = { x, y };
       if (char === 'B') points.bonus = { x, y };
-      if (char === 'F') points.flag = { x, y };
-      if (char === 'X') points.decrypt = { x, y };
-      if (char === 'W') points.firewall = { x, y };
       return tile;
     })
   );
