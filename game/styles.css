@@ -1,0 +1,1757 @@
+/* ─── Kernel Academy: Ring-0 Chronicles ─── Premium UI ─── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #060b14;
+  --bg-gradient: linear-gradient(145deg, #0a1628 0%, #060b14 50%, #080e1c 100%);
+  --panel: rgba(14, 26, 47, 0.65);
+  --panel-solid: #0e1a2f;
+  --panel-2: rgba(16, 32, 58, 0.55);
+  --glass-border: rgba(45, 80, 130, 0.35);
+  --glass-shine: rgba(80, 140, 220, 0.06);
+  --line: rgba(45, 79, 116, 0.5);
+  --text: #e8f0fa;
+  --text-secondary: #8fa8c8;
+  --muted: #6b8bb5;
+  --accent: #57d7c8;
+  --accent-glow: rgba(87, 215, 200, 0.15);
+  --warn: #ff6d7f;
+  --gold: #ffd37e;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Reset ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  overflow: hidden;
+  height: 100%;
+}
+
+body {
+  height: 100%;
+  overflow: hidden;
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  background-image: var(--bg-gradient);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Utility ── */
+.hidden {
+  display: none !important;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* ═══════════════════════════════════════════════
+   BOOT & PANIC OVERLAYS
+   ═══════════════════════════════════════════════ */
+/* ── Boot Overlay ── */
+.boot-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 6, 12, 0.97);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.boot-window {
+  width: min(840px, 92vw);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, rgba(12, 22, 40, 0.95) 0%, rgba(6, 11, 20, 0.98) 100%);
+  padding: 24px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03) inset, 0 24px 80px rgba(0, 0, 0, 0.6);
+  animation: overlayIn 0.4s ease-out;
+}
+
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.boot-window h2 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 14px;
+  color: var(--accent);
+}
+
+.boot-window pre {
+  min-height: 240px;
+  max-height: 55vh;
+  overflow: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #7fbfea;
+  background: rgba(4, 8, 16, 0.7);
+  border: 1px solid rgba(30, 50, 80, 0.4);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+}
+
+.boot-window p {
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* -- Kernel Panic Overlay (fullscreen black terminal) -- */
+.panic-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: #000000;
+  animation: panicFlash 0.3s ease-out;
+  overflow: hidden;
+}
+
+/* CRT scanline effect */
+.panic-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 255, 255, 0.015) 2px,
+      rgba(255, 255, 255, 0.015) 4px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Subtle CRT edge vignette */
+.panic-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.4) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes panicFlash {
+  0% {
+    background: #ffffff;
+  }
+
+  15% {
+    background: #ff0000;
+  }
+
+  30% {
+    background: #220000;
+  }
+
+  50% {
+    background: #0a0000;
+  }
+
+  100% {
+    background: #000000;
+  }
+}
+
+.panic-window {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 30px;
+  max-width: 1000px;
+  width: 100%;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+
+.panic-window h2 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+  color: #ff3333;
+  text-shadow: 0 0 8px rgba(255, 0, 0, 0.4);
+}
+
+.panic-window pre {
+  flex: 1;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #cccccc;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  min-height: 0;
+}
+
+/* Panic text color classes */
+.panic-window pre .p-red {
+  color: #ff4444;
+}
+
+.panic-window pre .p-yellow {
+  color: #ffcc00;
+}
+
+.panic-window pre .p-white {
+  color: #ffffff;
+}
+
+.panic-window pre .p-gray {
+  color: #888888;
+}
+
+.panic-window pre .p-cyan {
+  color: #00cccc;
+}
+
+.panic-window pre .p-green {
+  color: #44ff44;
+}
+
+/* Recovery terminal */
+.panic-recovery {
+  margin-top: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #333333;
+}
+
+.panic-recovery label {
+  color: #44ff44 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 13px !important;
+  text-shadow: 0 0 4px rgba(68, 255, 68, 0.3);
+}
+
+.panic-recovery input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #0a0a0a;
+  border: 1px solid #333333;
+  border-radius: 2px;
+  color: #00ff00;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  caret-color: #00ff00;
+}
+
+.panic-recovery input:focus {
+  border-color: #00ff00;
+  box-shadow: 0 0 6px rgba(0, 255, 0, 0.15);
+  outline: none;
+}
+
+.panic-recovery input::placeholder {
+  color: #444444;
+}
+
+.panic-feedback {
+  color: #ff4444 !important;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  margin-top: 6px;
+  text-shadow: 0 0 4px rgba(255, 0, 0, 0.2);
+}
+
+.panic-window .dialog-actions {
+  margin-top: 8px;
+}
+
+.panic-window .dialog-actions button {
+  background: #1a1a1a;
+  border: 1px solid #444444;
+  color: #cccccc;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 7px 16px;
+  border-radius: 2px;
+  text-transform: none;
+}
+
+.panic-window .dialog-actions button:hover {
+  background: #2a2a2a;
+  border-color: #00ff00;
+  color: #00ff00;
+  box-shadow: 0 0 8px rgba(0, 255, 0, 0.1);
+  transform: none;
+}
+
+/* ═══════════════════════════════════════════════
+   MAIN LAYOUT
+   ═══════════════════════════════════════════════ */
+.layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 1520px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  gap: 10px;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.title-panel {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(16, 32, 60, 0.6) 0%, rgba(8, 16, 32, 0.7) 100%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.title-panel h1 {
+  color: var(--gold);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(16px, 2.2vw, 26px);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  text-shadow: 0 0 30px rgba(255, 211, 126, 0.15);
+}
+
+.title-panel>div:first-child>p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 3px;
+  letter-spacing: 0.2px;
+}
+
+.header-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.header-stats span {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: rgba(10, 22, 44, 0.6);
+  padding: 6px 12px;
+  color: var(--accent);
+  transition: var(--transition);
+}
+
+.header-stats span:hover {
+  background: var(--accent-glow);
+  border-color: rgba(87, 215, 200, 0.3);
+}
+
+/* ── Game Grid ── */
+.game-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── World / Canvas Panel ── */
+.world-panel {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  flex: 1;
+  border: 1px solid rgba(53, 91, 133, 0.4);
+  border-radius: var(--radius-sm);
+  background: rgba(8, 18, 34, 0.6);
+  image-rendering: pixelated;
+}
+
+.world-help {
+  flex-shrink: 0;
+  margin-top: 8px;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  text-align: center;
+  opacity: 0.7;
+}
+
+/* ── Hamburger Menu Button (Static in Header) ── */
+.menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--accent);
+  transition: var(--transition);
+}
+
+.menu-toggle:hover {
+  background: var(--panel-solid);
+  border-color: var(--accent);
+  box-shadow: 0 0 15px var(--accent-glow);
+}
+
+/* ── Ops Panel (Off-Canvas Drawer) ── */
+.ops-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 380px;
+  height: 100vh;
+  background: rgba(6, 11, 20, 0.95);
+  border-left: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px);
+  padding: 80px 24px 24px;
+  overflow-y: auto;
+  transform: translateX(110%);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 90;
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
+}
+
+.ops-panel.active {
+  transform: translateX(0);
+}
+
+/* Backdrop to dim the game when the drawer is open */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 80;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Cards ── */
+.card {
+  flex-shrink: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(165deg, rgba(16, 30, 55, 0.5) 0%, rgba(10, 18, 35, 0.55) 100%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding: 14px 16px;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--glass-shine), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.card:hover {
+  border-color: rgba(55, 95, 150, 0.5);
+  background: linear-gradient(165deg, rgba(18, 35, 62, 0.6) 0%, rgba(12, 22, 42, 0.6) 100%);
+}
+
+.card:hover::before {
+  opacity: 1;
+}
+
+.card h2 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(45, 80, 130, 0.2);
+}
+
+.card p,
+.card li {
+  line-height: 1.55;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.card p+p {
+  margin-top: 3px;
+}
+
+.card ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.card li {
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(8, 16, 32, 0.3);
+  border: 1px solid rgba(30, 55, 90, 0.2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  transition: var(--transition);
+}
+
+.card li:hover {
+  background: rgba(12, 24, 48, 0.5);
+  border-color: rgba(40, 70, 120, 0.3);
+}
+
+.card pre {
+  margin-top: 10px;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  border: 1px solid rgba(30, 55, 90, 0.3);
+  border-radius: 8px;
+  background: rgba(6, 12, 24, 0.5);
+  color: #8ebde6;
+}
+
+/* ── Palette ── */
+.palette-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.palette-row span {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+select {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(8, 16, 32, 0.7);
+  color: var(--text);
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: var(--transition);
+  outline: none;
+}
+
+select:hover,
+select:focus {
+  border-color: rgba(87, 215, 200, 0.4);
+  box-shadow: 0 0 0 2px rgba(87, 215, 200, 0.08);
+}
+
+/* ── Status Line / Footer ── */
+.status-line {
+  flex-shrink: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, rgba(8, 18, 36, 0.6) 0%, rgba(6, 12, 24, 0.7) 100%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding: 10px 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  letter-spacing: 0.2px;
+}
+
+/* ═══════════════════════════════════════════════
+   DIALOG OVERLAYS
+   ═══════════════════════════════════════════════ */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 6, 14, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.dialog-window {
+  width: min(700px, 92vw);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, rgba(14, 28, 52, 0.95) 0%, rgba(8, 16, 32, 0.97) 100%);
+  padding: 22px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 24px 80px rgba(0, 0, 0, 0.5);
+  animation: overlayIn 0.3s ease-out;
+}
+
+.dialog-window h3 {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  color: var(--gold);
+  margin-bottom: 8px;
+  letter-spacing: 0.3px;
+}
+
+.dialog-window p {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.pixel-dialog {
+  max-width: 740px;
+}
+
+.dialog-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+#dialog-portrait {
+  width: 72px;
+  height: 72px;
+  image-rendering: pixelated;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: rgba(6, 12, 26, 0.6);
+  flex-shrink: 0;
+}
+
+.dialog-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dialog-speaker {
+  color: var(--accent) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 11px !important;
+  letter-spacing: 0.5px;
+}
+
+.dialog-window pre {
+  margin-top: 12px;
+  border: 1px solid rgba(30, 55, 90, 0.3);
+  border-radius: 8px;
+  background: rgba(6, 12, 26, 0.6);
+  padding: 14px;
+  white-space: pre-wrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8ebde6;
+}
+
+/* ── Terminal Window ── */
+.terminal-window {
+  border-color: rgba(87, 215, 200, 0.2);
+}
+
+/* ── Form Controls ── */
+input,
+button {
+  font-family: 'Inter', sans-serif;
+  border-radius: 8px;
+  outline: none;
+}
+
+input {
+  margin-top: 8px;
+  width: 100%;
+  border: 1px solid var(--glass-border);
+  background: rgba(6, 12, 26, 0.6);
+  color: var(--text);
+  padding: 10px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  transition: var(--transition);
+}
+
+input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(87, 215, 200, 0.1);
+}
+
+button {
+  border: 1px solid rgba(55, 95, 150, 0.4);
+  background: linear-gradient(135deg, rgba(20, 42, 78, 0.7) 0%, rgba(14, 30, 58, 0.7) 100%);
+  color: var(--text);
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  letter-spacing: 0.2px;
+}
+
+button:hover {
+  background: linear-gradient(135deg, rgba(28, 56, 100, 0.8) 0%, rgba(20, 40, 74, 0.8) 100%);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(87, 215, 200, 0.1);
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+.dialog-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+}
+
+#terminal-feedback {
+  color: var(--warn);
+  font-size: 12.5px;
+  min-height: 20px;
+  margin-top: 8px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── Responsive Mobile ── */
+@media (max-width: 1100px) {
+  .title-panel {
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 12px 16px;
+  }
+
+  .game-grid {
+    padding: 20px;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .header-stats {
+    display: none;
+  }
+
+  .world-panel,
+  canvas {
+    max-width: 100%;
+    width: 100%;
+    height: auto;
+  }
+}
+
+/* ── Header Layout ── */
+.title-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--glass-border);
+  backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 20;
+}
+
+.title-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.header-stats {
+  display: flex;
+  gap: 12px;
+}
+
+/* ── Game Grid & Canvas ── */
+.game-grid {
+  display: flex;
+  justify-content: center;
+  padding: 40px;
+  width: 100%;
+}
+
+.world-panel {
+  position: relative;
+  z-index: 10;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--glass-border);
+  max-width: 100%;
+}
+
+canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+/* ── Game Title ── */
+.game-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+
+.title-accent {
+  color: var(--accent);
+  text-shadow: 0 0 12px rgba(87, 215, 200, 0.5);
+}
+
+.game-subtitle {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* ── Stat Badges ── */
+.stat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--glass-border);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  transition: var(--transition);
+  backdrop-filter: blur(6px);
+}
+
+.stat-badge:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.stat-icon {
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.stat-xp .stat-icon {
+  color: var(--gold);
+}
+
+/* ── Keyboard Legend ── */
+.world-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  margin-top: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  border: 1px solid var(--glass-border);
+  animation: subtlePulse 4s ease-in-out infinite;
+}
+
+.key-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(45, 80, 130, 0.4) 0%, rgba(25, 50, 90, 0.6) 100%);
+  border: 1px solid rgba(80, 130, 200, 0.3);
+  border-bottom: 2px solid rgba(40, 70, 120, 0.5);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.key-sep {
+  color: rgba(100, 140, 200, 0.3);
+  margin: 0 2px;
+}
+
+.fog-hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+/* ── Animations ── */
+@keyframes subtlePulse {
+
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes badgeGlow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(87, 215, 200, 0.15);
+  }
+
+  50% {
+    box-shadow: 0 0 18px rgba(87, 215, 200, 0.35);
+  }
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Card/Terminal/Dialog Styles ── */
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+
+.card-icon {
+  font-size: 12px;
+  color: var(--gold);
+}
+
+.console-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.console-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(10, 20, 40, 0.4);
+}
+
+.console-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+  min-width: 50px;
+  letter-spacing: 0.5px;
+}
+
+.console-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.incident-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--warn);
+  margin-bottom: 4px;
+}
+
+.incident-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.incident-trace {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--gold);
+  background: rgba(10, 20, 40, 0.5);
+  border: 1px solid rgba(255, 211, 126, 0.1);
+  padding: 8px 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  max-height: 60px;
+}
+
+.info-list,
+.mission-list,
+.concept-list {
+  list-style: none;
+  padding: 0;
+}
+
+.theme-preview-text {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--glass-border);
+  margin-bottom: 12px;
+}
+
+.terminal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot-red {
+  background: #ff5f57;
+}
+
+.dot-yellow {
+  background: #ffbd2e;
+}
+
+.dot-green {
+  background: #28ca41;
+}
+
+.terminal-header-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gold);
+  margin-left: 8px;
+}
+
+.terminal-question {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.terminal-code-block {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: rgba(10, 20, 40, 0.6);
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid var(--accent);
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: var(--gold);
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+
+.terminal-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.terminal-prompt {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.terminal-input-row input {
+  flex: 1;
+}
+
+.terminal-feedback {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--warn);
+  min-height: 18px;
+  margin-bottom: 6px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), #3bb8a8);
+  color: #060b14;
+  font-weight: 700;
+  border: none;
+  padding: 8px 24px;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(87, 215, 200, 0.3);
+}
+
+.btn-secondary {
+  background: var(--panel);
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-secondary:hover {
+  border-color: var(--text-secondary);
+  color: var(--text);
+}
+
+.lc-window {
+  text-align: center;
+  max-width: 420px;
+  animation: fadeSlideUp 0.4s ease-out;
+}
+
+.lc-badge {
+  font-size: 40px;
+  color: var(--gold);
+  text-shadow: 0 0 24px rgba(255, 211, 126, 0.5);
+  margin-bottom: 8px;
+  animation: subtlePulse 2s ease-in-out infinite;
+}
+
+.lc-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.lc-level-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.lc-stats {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin: 16px 0;
+}
+
+.lc-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.lc-stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.lc-stat-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+.lc-xp-color {
+  color: var(--gold);
+}
+
+.lc-total-color {
+  color: var(--accent);
+}
+
+.lc-attempts-color {
+  color: var(--warn);
+}
+
+.lc-next-info {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+
+.lc-actions {
+  justify-content: center;
+}
+
+.dialog-body {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.dialog-code-block {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  background: rgba(10, 20, 40, 0.5);
+  border: 1px solid var(--glass-border);
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: var(--gold);
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.boot-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(87, 215, 200, 0.15);
+}
+
+.boot-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: blink 1s ease-in-out infinite;
+}
+
+.boot-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+}
+
+.game-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 0 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.footer-sep {
+  color: rgba(100, 140, 200, 0.2);
+}
+
+.footer-link {
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-link:hover {
+  color: var(--accent);
+  opacity: 1;
+}
+
+
+
+.card-icon {
+  font-size: 12px;
+  color: var(--gold);
+}
+
+/* ── Operator Console ── */
+.console-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.console-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(10, 20, 40, 0.4);
+}
+
+.console-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+  min-width: 50px;
+  letter-spacing: 0.5px;
+}
+
+.console-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* ── Incident Card ── */
+.incident-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--warn);
+  margin-bottom: 4px;
+}
+
+.incident-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.incident-trace {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--gold);
+  background: rgba(10, 20, 40, 0.5);
+  border: 1px solid rgba(255, 211, 126, 0.1);
+  padding: 8px 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  max-height: 60px;
+}
+
+.info-list,
+.mission-list,
+.concept-list {
+  list-style: none;
+  padding: 0;
+}
+
+.theme-preview-text {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+/* ── Terminal Window Header (traffic lights) ── */
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--glass-border);
+  margin-bottom: 12px;
+}
+
+.terminal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot-red {
+  background: #ff5f57;
+}
+
+.dot-yellow {
+  background: #ffbd2e;
+}
+
+.dot-green {
+  background: #28ca41;
+}
+
+.terminal-header-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gold);
+  margin-left: 8px;
+}
+
+.terminal-question {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.terminal-code-block {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: rgba(10, 20, 40, 0.6);
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid var(--accent);
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: var(--gold);
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+
+.terminal-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.terminal-prompt {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.terminal-input-row input {
+  flex: 1;
+}
+
+.terminal-feedback {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--warn);
+  min-height: 18px;
+  margin-bottom: 6px;
+}
+
+/* ── Buttons ── */
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), #3bb8a8);
+  color: #060b14;
+  font-weight: 700;
+  border: none;
+  padding: 8px 24px;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(87, 215, 200, 0.3);
+}
+
+.btn-secondary {
+  background: var(--panel);
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-secondary:hover {
+  border-color: var(--text-secondary);
+  color: var(--text);
+}
+
+/* ── Level Complete Overlay ── */
+.lc-window {
+  text-align: center;
+  max-width: 420px;
+  animation: fadeSlideUp 0.4s ease-out;
+}
+
+.lc-badge {
+  font-size: 40px;
+  color: var(--gold);
+  text-shadow: 0 0 24px rgba(255, 211, 126, 0.5);
+  margin-bottom: 8px;
+  animation: subtlePulse 2s ease-in-out infinite;
+}
+
+.lc-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.lc-level-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.lc-stats {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin: 16px 0;
+}
+
+.lc-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.lc-stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.lc-stat-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+.lc-xp-color {
+  color: var(--gold);
+}
+
+.lc-total-color {
+  color: var(--accent);
+}
+
+.lc-attempts-color {
+  color: var(--warn);
+}
+
+.lc-next-info {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+
+.lc-actions {
+  justify-content: center;
+}
+
+/* ── Dialog Enhancements ── */
+.dialog-body {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.dialog-code-block {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  background: rgba(10, 20, 40, 0.5);
+  border: 1px solid var(--glass-border);
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: var(--gold);
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+/* ── Boot Header ── */
+.boot-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(87, 215, 200, 0.15);
+}
+
+.boot-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: blink 1s ease-in-out infinite;
+}
+
+.boot-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+}
+
+/* ── Game Footer ── */
+.game-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 0 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.footer-sep {
+  color: rgba(100, 140, 200, 0.2);
+}

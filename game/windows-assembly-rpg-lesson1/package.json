@@ -1,0 +1,25 @@
+{
+  "name": "kernel-academy-ring0",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kernel Academy: Ring-0 Chronicles web + macOS (Tauri) app",
+  "scripts": {
+    "dev:web": "python3 -m http.server 8000",
+    "lint:js": "eslint game.js scripts/**/*.js",
+    "lint:format": "prettier --check \"*.{html,css,js,json,md}\" \"scripts/**/*.js\" \"src-tauri/**/*.{json,toml,rs}\"",
+    "test:syntax": "node --check game.js",
+    "test:smoke": "node scripts/smoke-test.js",
+    "test": "npm run test:syntax && npm run test:smoke",
+    "validate": "npm run lint:js && npm run lint:format && npm run test",
+    "dev:tauri": "tauri dev",
+    "build:tauri": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.0.0",
+    "prettier": "^3.0.0"
+  }
+}

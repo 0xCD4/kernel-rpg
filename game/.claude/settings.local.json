@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(start index.html)",
+      "Bash(start \"\" \"C:\\\\Users\\\\AhmetGöker\\\\Desktop\\\\kernel-rpg\\\\game\\\\index.html\")"
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+name: Kernel RPG CI
+
+on:
+  push:
+    paths:
+      - "windows-assembly-rpg-lesson1/**"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "windows-assembly-rpg-lesson1/**"
+      - ".github/workflows/ci.yml"
+
+jobs:
+  quality:
+    name: Lint + Test + Smoke
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: windows-assembly-rpg-lesson1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: windows-assembly-rpg-lesson1/package.json
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Validate quality gate
+        run: npm run validate

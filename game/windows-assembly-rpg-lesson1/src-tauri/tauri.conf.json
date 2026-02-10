@@ -1,0 +1,34 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Kernel Academy Ring-0",
+  "version": "0.1.0",
+  "identifier": "com.kernelacademy.ring0",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devUrl": "http://127.0.0.1:8000",
+    "frontendDist": ".."
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Kernel Academy: Ring-0 Chronicles",
+        "width": 1280,
+        "height": 820,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Education",
+    "shortDescription": "A level-based Linux kernel programming RPG",
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
+  }
+}

@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="ring0 - Kernel incident training ground. A 10-level maze-based kernel programming training game." />
+  <meta name="keywords" content="kernel, linux, training, rpg, maze, cybersecurity, ring0" />
+  <meta name="author" content="0xCD4" />
+  <meta name="theme-color" content="#0a0e17" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="ring0 - kernel incident training ground" />
+  <meta property="og:description"
+    content="A 10-level maze-based kernel programming training game. Dodge bugs, patch in the terminal, survive kernel panics." />
+  <meta property="og:type" content="website" />
+
+  <title>ring0 - kernel incident training ground</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet" />
+
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body tabindex="0">
+
+  <!-- ===============================================
+       BOOT OVERLAY
+       =============================================== -->
+  <div id="boot-overlay" class="boot-overlay">
+    <div class="boot-window">
+      <div class="boot-header">
+        <span class="boot-indicator"></span>
+        <span class="boot-label">SYSTEM BOOT</span>
+      </div>
+      <pre id="boot-log"></pre>
+    </div>
+  </div>
+
+  <!-- ===============================================
+       KERNEL PANIC OVERLAY
+       =============================================== -->
+  <div id="panic-overlay" class="panic-overlay hidden">
+    <div class="panic-window">
+      <h2>KERNEL PANIC - not syncing</h2>
+      <pre id="panic-log"></pre>
+      <div id="panic-recovery-box" class="panic-recovery" style="display:none">
+        <label for="panic-input">root@emergency:~#</label>
+        <input id="panic-input" type="text" autocomplete="off" spellcheck="false"
+          placeholder="type recovery command..." />
+        <p id="panic-feedback" class="panic-feedback"></p>
+      </div>
+      <div class="dialog-actions" id="panic-actions" style="display:none">
+        <button id="panic-retry" type="button">exec</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===============================================
+       LEVEL COMPLETE OVERLAY
+       =============================================== -->
+  <div id="level-complete-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window lc-window">
+      <div class="lc-badge">✦</div>
+      <h3 id="lc-title" class="lc-title">LEVEL COMPLETE</h3>
+      <p id="lc-level" class="lc-level-name"></p>
+      <div class="lc-stats">
+        <div class="lc-stat">
+          <span class="lc-stat-value lc-xp-color" id="lc-xp">0</span>
+          <span class="lc-stat-label">XP EARNED</span>
+        </div>
+        <div class="lc-stat">
+          <span class="lc-stat-value lc-total-color" id="lc-total">0</span>
+          <span class="lc-stat-label">TOTAL XP</span>
+        </div>
+        <div class="lc-stat">
+          <span class="lc-stat-value lc-attempts-color" id="lc-attempts">0</span>
+          <span class="lc-stat-label">ATTEMPTS</span>
+        </div>
+      </div>
+      <p id="lc-next" class="lc-next-info"></p>
+      <div class="dialog-actions lc-actions">
+        <button id="lc-continue" type="button" class="btn-primary">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===============================================
+       BONUS TERMINAL OVERLAY
+       =============================================== -->
+  <div id="bonus-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window terminal-window">
+      <div class="terminal-header">
+        <span class="terminal-dot dot-red"></span>
+        <span class="terminal-dot dot-yellow"></span>
+        <span class="terminal-dot dot-green"></span>
+        <span class="terminal-header-text" id="bonus-title">BONUS TERMINAL</span>
+      </div>
+      <p id="bonus-text" class="terminal-question"></p>
+      <pre id="bonus-code" class="terminal-code-block"></pre>
+      <div class="terminal-input-row">
+        <span class="terminal-prompt">$</span>
+        <input id="bonus-input" type="text" autocomplete="off" spellcheck="false" placeholder="type your answer..." />
+      </div>
+      <p id="bonus-feedback" class="terminal-feedback"></p>
+      <div class="dialog-actions">
+        <button id="bonus-submit" type="button" class="btn-primary">Submit</button>
+        <button id="bonus-close" type="button" class="btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===============================================
+       MAIN GAME LAYOUT
+       =============================================== -->
+  <main id="game-root" class="layout hidden">
+
+    <!-- Drawer Backdrop -->
+    <div id="backdrop" class="backdrop"></div>
+
+    <!-- Top Header Bar -->
+    <header class="title-panel">
+      <div class="title-left">
+        <h1 class="game-title">ring<span class="title-accent">0</span></h1>
+        <p class="game-subtitle">kernel incident training ground</p>
+      </div>
+      <div class="header-right">
+        <nav class="header-stats" aria-label="Game statistics">
+          <div class="stat-badge" id="hud-level">
+            <span class="stat-icon">◈</span> Level: 1 / 10
+          </div>
+          <div class="stat-badge stat-xp" id="hud-xp">
+            <span class="stat-icon">⬡</span> XP: 0
+          </div>
+          <div class="stat-badge" id="hud-attempts">
+            <span class="stat-icon">⟳</span> Attempts: 0
+          </div>
+        </nav>
+        <!-- Hamburger Menu Button (Moved into Header) -->
+        <button id="menu-toggle" class="menu-toggle" type="button" aria-label="Toggle Operator Console">
+          <span style="font-size:24px">☰</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Game Grid: Canvas + Side Panel -->
+    <section class="game-grid">
+
+      <!-- Left: Maze Canvas (Widened) -->
+      <section class="world-panel">
+        <canvas id="game-canvas" width="1280" height="720" aria-label="Kernel maze game area"></canvas>
+        <div class="world-controls">
+          <div class="key-legend">
+            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move
+            <span class="key-sep">|</span>
+            <kbd>E</kbd> Interact
+            <span class="key-sep">|</span>
+            <kbd>I</kbd> Roadmap
+            <span class="key-sep">|</span>
+            <kbd>H</kbd> Hint
+            <span class="key-sep">|</span>
+            <kbd>R</kbd> Reset
+          </div>
+          <div class="fog-hint">Move through the dark. Dodge the bugs!</div>
+        </div>
+      </section>
+
+      <!-- Right: Operations Panel -->
+      <aside class="ops-panel">
+
+        <!-- Operator Console -->
+        <article class="card card-operator">
+          <h2 class="card-title"><span class="card-icon">▸</span> Operator Console</h2>
+          <div class="console-fields">
+            <div class="console-row">
+              <span class="console-label">Status</span>
+              <span class="console-value" id="operator-status">Incident triage</span>
+            </div>
+            <div class="console-row">
+              <span class="console-label">Position</span>
+              <span class="console-value" id="operator-position">(0, 0)</span>
+            </div>
+            <div class="console-row">
+              <span class="console-label">Objective</span>
+              <span class="console-value" id="operator-objective">Get briefed by mentor</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Theme Selection -->
+        <article class="card card-theme">
+          <h2 class="card-title"><span class="card-icon">◆</span> Maze Theme</h2>
+          <label class="palette-row" for="theme-select">
+            <span>Color Palette</span>
+            <select id="theme-select">
+              <option value="deep">Deep Kernel</option>
+              <option value="emerald">Emerald Ops</option>
+              <option value="violet">Violet Night</option>
+              <option value="amber">Amber Debug</option>
+            </select>
+          </label>
+          <p id="theme-preview" class="theme-preview-text">Active theme: Deep Kernel</p>
+        </article>
+
+        <!-- Incident Flow -->
+        <article class="card card-incident">
+          <h2 class="card-title"><span class="card-icon">⚡</span> Incident Flow</h2>
+          <p id="incident-title" class="incident-title"></p>
+          <p id="incident-desc" class="incident-desc"></p>
+          <pre id="incident-trace" class="incident-trace"></pre>
+        </article>
+
+        <!-- Learning Notes -->
+        <article class="card">
+          <h2 class="card-title"><span class="card-icon">📖</span> Learning Notes</h2>
+          <ul id="lesson-list" class="info-list"></ul>
+        </article>
+
+        <!-- Mission Checklist -->
+        <article class="card card-mission">
+          <h2 class="card-title"><span class="card-icon">☐</span> Mission Checklist</h2>
+          <ul id="mission-list" class="mission-list"></ul>
+        </article>
+
+        <!-- Unlocked Concepts -->
+        <article class="card">
+          <h2 class="card-title"><span class="card-icon">◇</span> Unlocked Concepts</h2>
+          <ul id="concept-list" class="concept-list"></ul>
+        </article>
+
+      </aside>
+    </section>
+
+    <!-- Status Bar -->
+    <footer id="status-line" class="status-line">
+      [ init ] Go to the mentor node and get the level briefing. Dodge the bugs!
+    </footer>
+
+    <!-- Footer Credits -->
+    <div class="game-footer">
+      <span>ring0 v1.0</span>
+      <span class="footer-sep">|</span>
+      <span>kernel incident training ground</span>
+      <span class="footer-sep">|</span>
+      <a href="https://github.com/0xCD4" target="_blank" rel="noopener" class="footer-link">github.com/0xCD4</a>
+    </div>
+
+  </main>
+
+  <!-- ===============================================
+       DIALOG OVERLAYS
+       =============================================== -->
+
+  <!-- Mentor Dialog -->
+  <div id="dialog-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window pixel-dialog">
+      <div class="dialog-top">
+        <canvas id="dialog-portrait" width="88" height="88" aria-label="Speaker portrait"></canvas>
+        <div class="dialog-meta">
+          <h3 id="dialog-title"></h3>
+          <p id="dialog-speaker" class="dialog-speaker">mentor@ring0</p>
+        </div>
+      </div>
+      <p id="dialog-text" class="dialog-body"></p>
+      <pre id="dialog-code" class="dialog-code-block"></pre>
+      <div class="dialog-actions">
+        <button id="dialog-close" type="button" class="btn-primary">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Terminal Overlay -->
+  <div id="terminal-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window terminal-window">
+      <div class="terminal-header">
+        <span class="terminal-dot dot-red"></span>
+        <span class="terminal-dot dot-yellow"></span>
+        <span class="terminal-dot dot-green"></span>
+        <span class="terminal-header-text" id="terminal-title"></span>
+      </div>
+      <p id="terminal-text" class="terminal-question"></p>
+      <pre id="terminal-code" class="terminal-code-block"></pre>
+      <div class="terminal-input-row">
+        <span class="terminal-prompt">$</span>
+        <input id="terminal-input" type="text" autocomplete="off" spellcheck="false" />
+      </div>
+      <p id="terminal-feedback" class="terminal-feedback"></p>
+      <div class="dialog-actions">
+        <button id="terminal-submit" type="button" class="btn-primary">Apply</button>
+        <button id="terminal-close" type="button" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="./snakeLogic.js"></script>
+  <script src="./app.js"></script>
+
+</body>
+
+</html>

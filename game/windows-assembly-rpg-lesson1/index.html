@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kernel Academy: Ring-0 Chronicles</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;600;700&family=VT323&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <header class="topbar">
+        <h1>Kernel Academy: Ring-0 Chronicles</h1>
+        <p class="subtitle">A maze-driven Linux kernel programming RPG</p>
+      </header>
+
+      <section class="game-shell" aria-label="Game area">
+        <canvas
+          id="gameCanvas"
+          width="960"
+          height="640"
+          aria-label="Kernel learning RPG map"
+        ></canvas>
+
+        <aside class="side-panel">
+          <section class="panel-block">
+            <h2>Operator</h2>
+            <p id="xp">XP: 0</p>
+            <p id="levelCounter">Level: 1 / 6</p>
+            <div class="progress-track" aria-hidden="true">
+              <span id="progressFill"></span>
+            </div>
+            <p id="questState">Status: Talk to the Level 1 mentor</p>
+          </section>
+
+          <section class="panel-block">
+            <h2>Active Level</h2>
+            <p id="stageName">L1: Boot Pipeline</p>
+            <p id="stageObjective">
+              Stabilize the UEFI -> bootloader -> kernel -> init flow.
+            </p>
+          </section>
+
+          <section class="panel-block incident-panel">
+            <h2>Kernel Incident</h2>
+            <p id="incidentTitle">Boot handoff failure</p>
+            <p id="incidentSymptom">Symptom: system drops to emergency shell after boot.</p>
+            <p id="incidentFix">Fix target: restore valid firmware -> init execution chain.</p>
+          </section>
+
+          <details class="panel-block panel-collapsible" open>
+            <summary>
+              <h2>Level Runbook</h2>
+            </summary>
+            <ul id="runbookList" class="list checklist">
+              <li class="runbook-pending">[ ] Meet mentor and read incident brief</li>
+              <li class="runbook-pending">[ ] Pass diagnosis quiz</li>
+              <li class="runbook-pending">[ ] Patch terminal coding task</li>
+              <li class="runbook-pending">[ ] Deploy patch to unlock gate</li>
+            </ul>
+          </details>
+
+          <details class="panel-block panel-collapsible" open>
+            <summary>
+              <h2>Unlocked Concepts</h2>
+            </summary>
+            <ul id="conceptList" class="list">
+              <li>No concepts unlocked yet.</li>
+            </ul>
+          </details>
+
+          <details class="panel-block panel-collapsible">
+            <summary>
+              <h2>Mission Log</h2>
+            </summary>
+            <ul id="missionLog" class="list">
+              <li>Start: speak to the Level 1 mentor.</li>
+            </ul>
+          </details>
+
+          <details class="panel-block panel-collapsible">
+            <summary>
+              <h2>Controls</h2>
+            </summary>
+            <p><kbd>WASD</kbd> / <kbd>Arrow Keys</kbd> Move</p>
+            <p><kbd>E</kbd> Interact</p>
+            <p><kbd>Space</kbd> Advance dialogue</p>
+            <p><kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> Quiz answer</p>
+            <p><kbd>I</kbd> Open or close instructions</p>
+            <p><kbd>Ctrl+Enter</kbd> Run coding tests</p>
+            <p><kbd>Esc</kbd> Close coding lab</p>
+          </details>
+
+          <section class="panel-block instructions-panel">
+            <h2>Academy Guide</h2>
+            <button
+              id="openInstructionsBtn"
+              class="ui-btn"
+              type="button"
+              aria-haspopup="dialog"
+              aria-controls="instructionModal"
+            >
+              Open Instructions
+            </button>
+          </section>
+        </aside>
+      </section>
+
+      <section class="dialogue-wrap" aria-live="polite">
+        <article class="dialogue-box" id="dialogueBox">
+          <h2 id="dialogueName">Chief Mentor Ceren</h2>
+          <p id="dialogueText">
+            Welcome to Ring-0 Academy. Press E near your mentor to begin Level 1.
+          </p>
+          <div id="choices" class="choices" hidden></div>
+        </article>
+      </section>
+
+      <section class="code-lab" id="codeLab" hidden>
+        <header class="code-lab-head">
+          <div class="code-lab-title-wrap">
+            <h2 id="codeLabTitle">Kernel Coding Lab</h2>
+            <p id="codeLabBrief">
+              Coding tasks open here. Complete TODO sections and run tests to pass.
+            </p>
+          </div>
+
+          <div class="code-actions">
+            <button id="runCodeBtn" type="button">Run Tests</button>
+            <button id="closeCodeBtn" type="button">Close Lab</button>
+          </div>
+        </header>
+
+        <details class="code-reference-wrap">
+          <summary class="code-ref-toggle">Reference</summary>
+          <pre id="codeReference" class="code-reference"></pre>
+        </details>
+
+        <div class="code-workspace">
+          <textarea
+            id="codeInput"
+            class="code-input"
+            spellcheck="false"
+            aria-label="Kernel code editor"
+          ></textarea>
+
+          <pre id="codeOutput" class="code-output"></pre>
+        </div>
+      </section>
+
+      <section
+        class="instruction-modal"
+        id="instructionModal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="instructionTitle"
+        hidden
+      >
+        <div class="instruction-backdrop" data-instruction-close="backdrop"></div>
+        <article class="instruction-window">
+          <header class="instruction-head">
+            <h2 id="instructionTitle">Kernel Academy Field Manual</h2>
+            <button
+              id="closeInstructionsBtn"
+              type="button"
+              class="modal-close-btn"
+              aria-label="Close instructions"
+            >
+              Close
+            </button>
+          </header>
+
+          <p class="instruction-intro">
+            Each level starts with a realistic kernel incident. Diagnose the symptom, pass
+            mentor checks, patch code in terminal, and deploy safely.
+          </p>
+
+          <div class="instruction-grid">
+            <section class="instruction-card">
+              <h3>Mission Loop</h3>
+              <ul class="list">
+                <li>1. Find the active mentor in the current maze region.</li>
+                <li>2. Pass all quiz questions for that level.</li>
+                <li>3. Complete TODO tasks in the coding lab terminal.</li>
+                <li>4. Deploy patch to unlock the next gate.</li>
+                <li>5. Repeat until all six levels are complete.</li>
+              </ul>
+            </section>
+
+            <section class="instruction-card">
+              <h3>Quick Keys</h3>
+              <ul class="list">
+                <li><kbd>WASD</kbd> or <kbd>Arrow Keys</kbd>: Move in the maze.</li>
+                <li><kbd>E</kbd>: Interact with mentor, terminal, or core.</li>
+                <li><kbd>Space</kbd>: Continue dialogue messages.</li>
+                <li><kbd>1</kbd>, <kbd>2</kbd>, <kbd>3</kbd>: Choose quiz answer.</li>
+                <li><kbd>Ctrl+Enter</kbd>: Run coding task tests.</li>
+                <li><kbd>I</kbd> or <kbd>Esc</kbd>: Close this instruction window.</li>
+              </ul>
+            </section>
+          </div>
+
+          <footer class="instruction-foot">
+            <button id="closeInstructionsFooterBtn" class="ui-btn" type="button">
+              Back To Maze
+            </button>
+          </footer>
+        </article>
+      </section>
+
+      <section class="kernel-panic-overlay" id="panicOverlay" hidden>
+        <div class="panic-screen">
+          <pre class="panic-text" id="panicText"></pre>
+          <button id="panicRetryBtn" class="panic-retry-btn" type="button">
+            [ Retry Level ]
+          </button>
+        </div>
+      </section>
+
+      <section class="touch-controls" aria-label="Touch controls">
+        <div class="dpad">
+          <button type="button" data-touch-dir="up">Up</button>
+          <button type="button" data-touch-dir="left">Left</button>
+          <button type="button" data-touch-dir="down">Down</button>
+          <button type="button" data-touch-dir="right">Right</button>
+        </div>
+        <div class="touch-actions">
+          <button type="button" data-touch-action="interact">Interact</button>
+          <button type="button" data-touch-action="advance">Next</button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>
