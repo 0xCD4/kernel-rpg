@@ -672,52 +672,61 @@ const LEVELS = [
 ];
 
 /* ═══════════════════════════════════════════════
-   CTF MODE - CAPTURE THE FLAG LEVELS
-   Fix the kernel code to earn the flag.
+   CTF MODE - "OPERATION RING-ZERO"
+   A coordinated kernel attack investigation.
+   Each level represents a stage of a real APT attack.
+   Based on real CVEs and kernel security incidents.
    Same tiles as training: M D P K G E B
    ═══════════════════════════════════════════════ */
 
 const CTF_LEVELS = [
   /* ===============================================
-     CTF 1: Buffer Overflow Patch (Easy)
-     Difficulty: 1/5 - Single function fill-in
+     CTF 1: Heap Overflow - Initial Access
+     Real-world: CVE-2021-22555 (Netfilter)
+     Difficulty: 1/5
      =============================================== */
   {
     id: 1,
-    title: 'CTF-01: Buffer Overflow',
-    incident: 'Stack buffer overflow in the custom syscall handler.',
-    trace: 'BUG: KASAN: stack-out-of-bounds in sys_custom_read+0x4f',
-    flag: 'flag{copy_from_us3r_sav3s}',
+    title: 'CTF-01: Heap Overflow [CVE-2021-22555]',
+    incident: 'Heap buffer overflow in Netfilter setsockopt handler allows arbitrary kernel write.',
+    trace: 'BUG: KASAN: slab-out-of-bounds in xt_compat_target_from_user+0x4f/0x350 [nf_tables]',
+    flag: 'flag{k3rn3l_h34p_0verfl0w_pwn3d}',
     timeLimit: 180,
     difficulty: 1,
     mentorText:
-      'Welcome to CTF mode, operator! This is a warm-up challenge. ' +
-      'A custom syscall copies user data directly into a kernel buffer using memcpy. ' +
-      'This is a classic buffer overflow. The fix is simple: use the safe copy API. ' +
-      'Patch the code at the terminal, and you will earn your first flag.',
+      'Welcome to Operation Ring-Zero! You are investigating a real kernel attack chain. ' +
+      'Stage 1: Initial Access. This is based on CVE-2021-22555, a Netfilter heap overflow. ' +
+      'In July 2021, a researcher earned $10,000 from Google\'s kCTF bounty program by exploiting this bug. ' +
+      'The vulnerability was in the Netfilter compat setsockopt handler: user-supplied data was copied ' +
+      'into a kernel heap buffer with memcpy, without checking the size parameter. This let an unprivileged ' +
+      'user overflow the heap buffer and achieve arbitrary code execution in Ring-0. ' +
+      'The fix is fundamental: never use memcpy for user pointers. The kernel has copy_from_user ' +
+      'which validates the source address and handles page faults safely. ' +
+      'Diagnose the root cause, then patch the code to earn your first flag!',
     lesson: [
-      'Never use memcpy for user pointers in kernel space.',
-      'copy_from_user validates the pointer and prevents overflow.',
-      'Always check the return value for -EFAULT.',
+      'CVE-2021-22555: Netfilter heap overflow, $10,000 kCTF bounty.',
+      'memcpy on __user pointers = no bounds check, no access validation.',
+      'copy_from_user verifies the pointer and returns -EFAULT on failure.',
+      'This bug class still accounts for ~30% of all kernel CVEs.',
     ],
     diagnosis: {
-      title: 'CTF Diagnosis: Overflow Source',
-      question: 'What makes memcpy unsafe for copying user data into the kernel?',
-      code: 'sys_custom_read(char __user *ubuf, size_t len) {\n    char kbuf[256];\n    memcpy(kbuf, ubuf, len);  // <-- BUG\n}',
-      answers: ['no bounds check', 'no validation', 'user pointer', 'overflow', 'unchecked length'],
-      hint: 'The length is not validated and the user pointer is not checked.',
+      title: 'CVE Analysis: Heap Overflow Root Cause',
+      question: 'Examine the vulnerable Netfilter handler. What critical validation is missing before the memcpy?',
+      code: '/* net/netfilter/x_tables.c - VULNERABLE */\nint xt_compat_target_from_user(\n    struct xt_entry_target *t,\n    void __user *src, unsigned int size)\n{\n    char buf[XT_ALIGN(sizeof(*t))];\n    /* BUG: size from user, no bounds check! */\n    memcpy(buf, src, size);\n    return xt_check_target(t, buf, size);\n}',
+      answers: ['bounds check', 'size check', 'length check', 'validation', 'input validation', 'size validation', 'length validation', 'buffer size'],
+      hint: 'The user controls the "size" parameter but the kernel buffer has a fixed size. What check is needed?',
       xp: 80,
     },
     patch: {
-      title: 'CTF Patch: Safe Copy',
-      question: 'Replace memcpy with the safe kernel function for user-to-kernel copy.',
-      code: 'sys_custom_read(char __user *ubuf, size_t len) {\n    char kbuf[256];\n    if (len > sizeof(kbuf)) return -EINVAL;\n    if (___(kbuf, ubuf, len))\n        return -EFAULT;\n    return 0;\n}',
+      title: 'Patch: Safe User-to-Kernel Copy [kernel/nf_tables]',
+      question: 'Replace the unsafe memcpy with the kernel\'s safe copy function for user-to-kernel transfers.',
+      code: '/* net/netfilter/x_tables.c - PATCHED */\nint xt_compat_target_from_user(\n    struct xt_entry_target *t,\n    void __user *src, unsigned int size)\n{\n    char buf[XT_ALIGN(sizeof(*t))];\n    if (size > sizeof(buf))\n        return -EINVAL;\n    if (___(buf, src, size))\n        return -EFAULT;\n    return xt_check_target(t, buf, size);\n}',
       answers: ['copy_from_user'],
-      hint: 'The safe function that copies data FROM user space.',
+      hint: 'The kernel function that safely copies data FROM user space. It validates the source pointer and handles faults.',
       xp: 150,
       attempts: 3,
     },
-    concepts: ['copy_from_user', 'buffer overflow', 'KASAN'],
+    concepts: ['copy_from_user', 'heap overflow', 'KASAN', 'CVE-2021-22555'],
     maze: [
       '###########################',
       '#M......#........#........#',
@@ -745,45 +754,52 @@ const CTF_LEVELS = [
   },
 
   /* ===============================================
-     CTF 2: Use-After-Free Fix (Easy-Medium)
-     Difficulty: 2/5 - Two blanks to fill
+     CTF 2: Use-After-Free - Persistence
+     Real-world: CVE-2023-0266 (ALSA)
+     Difficulty: 2/5
      =============================================== */
   {
     id: 2,
-    title: 'CTF-02: Use-After-Free',
-    incident: 'SLAB use-after-free crash after freeing a network socket buffer.',
-    trace: 'BUG: KASAN: use-after-free in skb_release_data+0xa8',
-    flag: 'flag{null_aft3r_kfr33_alw4ys}',
+    title: 'CTF-02: Use-After-Free [CVE-2023-0266]',
+    incident: 'Use-after-free in ALSA PCM driver allows persistent kernel-level access.',
+    trace: 'BUG: KASAN: use-after-free in snd_pcm_hw_params+0xa8/0x4e0 [snd_pcm]',
+    flag: 'flag{null_p0inter_k1lls_uaf}',
     timeLimit: 200,
     difficulty: 2,
     mentorText:
-      'This one is a bit trickier. A network driver frees an skb (socket buffer) ' +
-      'but keeps using the pointer afterward. The SLAB allocator may reassign that memory, ' +
-      'causing type confusion or data corruption. ' +
-      'Your job: free the memory AND null the pointer. Two fixes needed.',
+      'Stage 2: Persistence. The attacker now uses a Use-After-Free to maintain kernel access. ' +
+      'This is based on CVE-2023-0266 in the ALSA sound subsystem, disclosed in January 2023. ' +
+      'The bug was actively exploited in the wild as part of a Samsung Android exploit chain. ' +
+      'The pattern is classic: a driver frees a struct with kfree_skb() but does not NULL the pointer. ' +
+      'Later code dereferences the stale pointer, which now points to recycled SLAB memory. ' +
+      'Since the SLUB allocator reuses freed areas for new objects, the attacker can perform ' +
+      'a heap spray to control what data occupies that memory -- leading to type confusion ' +
+      'and arbitrary code execution. The fix is one of the oldest rules in kernel programming: ' +
+      'always NULL your pointers after free. This prevents the stale pointer from being usable.',
     lesson: [
-      'After kfree(), the pointer becomes a dangling reference.',
-      'Always set pointers to NULL after freeing.',
-      'KASAN detects UAF bugs by poisoning freed memory.',
+      'CVE-2023-0266: ALSA UAF, exploited in-the-wild on Android.',
+      'SLAB/SLUB allocator reuses freed memory for new objects.',
+      'Dangling pointer + heap spray = type confusion attack.',
+      'Rule: always set pointer = NULL immediately after kfree().',
     ],
     diagnosis: {
-      title: 'CTF Diagnosis: UAF Pattern',
-      question: 'What type of bug occurs when freed memory is accessed through a stale pointer?',
-      code: 'kfree(skb->data);\n// ... later ...\nmemcpy(skb->data, payload, len); // CRASH',
+      title: 'CVE Analysis: UAF Exploitation Pattern',
+      question: 'The driver frees skb->head with kfree_skb, but later code still reads through it. What vulnerability class is this?',
+      code: '/* sound/core/pcm_native.c - VULNERABLE */\nstatic void snd_pcm_release_substream(\n    struct snd_pcm_substream *sub)\n{\n    kfree_skb(sub->runtime->dma_buf);\n    /* BUG: pointer not cleared! */\n    /* ... later in another thread ... */\n    memcpy(dest, sub->runtime->dma_buf->data,\n        sub->runtime->frame_bytes);  /* UAF! */\n}',
       answers: ['use after free', 'uaf', 'use-after-free', 'dangling pointer'],
-      hint: 'The memory was freed but the pointer still points to it.',
+      hint: 'The memory at dma_buf was freed, but the pointer still holds the old address. Accessing freed memory is...',
       xp: 100,
     },
     patch: {
-      title: 'CTF Patch: Safe Deallocation',
-      question: 'Complete both lines to safely free and nullify the buffer.',
-      code: 'void release_skb(struct sk_buff *skb) {\n    if (skb->data) {\n        ___(skb->data);\n        skb->data = ___;\n    }\n}',
-      answers: ['kfree', 'NULL'],
-      hint: 'First free the memory, then set the pointer to the null sentinel.',
-      xp: 250,
+      title: 'Patch: Prevent Dangling Pointer [sound/core/pcm]',
+      question: 'After freeing the DMA buffer, what must the pointer be set to in order to prevent reuse?',
+      code: '/* sound/core/pcm_native.c - PATCHED */\nstatic void snd_pcm_release_substream(\n    struct snd_pcm_substream *sub)\n{\n    kfree_skb(sub->runtime->dma_buf);\n    sub->runtime->dma_buf = ___;\n    /* Now any later access will trigger\n       a clean NULL-deref instead of UAF */\n}',
+      answers: ['NULL', 'null', '0'],
+      hint: 'The universal sentinel value that marks a pointer as "no longer valid".',
+      xp: 200,
       attempts: 3,
     },
-    concepts: ['use-after-free', 'kfree + NULL', 'KASAN detection'],
+    concepts: ['use-after-free', 'SLAB recycling', 'heap spray', 'CVE-2023-0266'],
     maze: [
       '###########################',
       '#M.........#..............#',
@@ -811,45 +827,54 @@ const CTF_LEVELS = [
   },
 
   /* ===============================================
-     CTF 3: Race Condition Lock (Medium)
-     Difficulty: 3/5 - Understanding lock primitives
+     CTF 3: Race Condition - Lateral Movement
+     Real-world: CVE-2016-5195 (Dirty COW)
+     Difficulty: 3/5
      =============================================== */
   {
     id: 3,
-    title: 'CTF-03: Race Condition',
-    incident: 'Data corruption in shared driver state from concurrent IRQ access.',
-    trace: 'lockdep: possible recursive lock in netdev_tx+0x2c0',
-    flag: 'flag{sp1n_l0ck_1rqsav3_ftw}',
-    timeLimit: 220,
+    title: 'CTF-03: Race Condition [Dirty COW]',
+    incident: 'IRQ-level race condition corrupts block device ring buffer data.',
+    trace: 'lockdep: possible recursive lock in blk_mq_dispatch_rq+0x2c0 [nvme]\nWARNING: lock held when returning to user space!',
+    flag: 'flag{sp1n_l0ck_1rqsav3_r4c3}',
+    timeLimit: 240,
     difficulty: 3,
     mentorText:
-      'Race condition in a network driver. Two CPUs hit the transmit path at the same time, ' +
-      'and the shared tx_ring buffer gets corrupted. A normal mutex will not work here because ' +
-      'we are in interrupt context. You need an IRQ-safe spinlock that also saves the CPU flags. ' +
-      'Complete both the lock and unlock calls correctly.',
+      'Stage 3: Lateral Movement. The attacker exploits a race condition. ' +
+      'This is inspired by the legendary Dirty COW bug (CVE-2016-5195) -- a race condition ' +
+      'in the Linux memory subsystem that existed for NINE YEARS before being found in 2016. ' +
+      'Two threads racing between a Copy-On-Write fault and madvise(MADV_DONTNEED) could ' +
+      'overwrite ANY read-only file on the system, including /etc/passwd. ' +
+      'In this challenge, you have a block device driver where the IRQ handler and the ' +
+      'process context both touch the same ring buffer. The critical question: ' +
+      'why can\'t you use a mutex in interrupt context? Because mutexes can sleep! ' +
+      'In IRQ context, calling schedule() would deadlock the entire CPU. ' +
+      'You need spin_lock_irqsave -- it disables local IRQs and saves the flags register, ' +
+      'so the critical section cannot be interrupted by the same IRQ on the same CPU.',
     lesson: [
-      'Spinlocks are needed for interrupt context synchronization.',
-      'spin_lock_irqsave disables IRQs and saves flags.',
-      'spin_unlock_irqrestore restores the saved flags.',
+      'CVE-2016-5195 (Dirty COW): 9-year-old race, overwrites read-only files.',
+      'In IRQ context: no sleeping, no schedule(), no mutex_lock().',
+      'spin_lock_irqsave: disables IRQs + saves flags + acquires lock.',
+      'spin_unlock_irqrestore: releases lock + restores saved IRQ state.',
     ],
     diagnosis: {
-      title: 'CTF Diagnosis: Lock Type',
-      question: 'Why can you not use a mutex in interrupt context?',
-      code: 'irq_handler(int irq, void *dev) {\n    mutex_lock(&dev->lock);  // BUG: scheduling in IRQ!\n    dev->tx_ring[head++] = pkt;\n    mutex_unlock(&dev->lock);\n}',
-      answers: ['mutex can sleep', 'sleep', 'cannot sleep in irq', 'scheduling'],
-      hint: 'Mutexes may call schedule(), which is forbidden in IRQ context.',
-      xp: 120,
+      title: 'CVE Analysis: Why Mutex Fails in IRQ',
+      question: 'The block driver IRQ handler uses mutex_lock to protect shared state. Why does this cause a kernel hang?',
+      code: '/* drivers/block/nvme-ring.c - VULNERABLE */\nstatic irqreturn_t nvme_irq_handler(\n    int irq, void *data)\n{\n    struct nvme_dev *dev = data;\n    /* BUG: mutex can sleep! */\n    mutex_lock(&dev->ring_lock);\n    dev->ring[dev->head++ % RING_SIZE] = readl(\n        dev->mmio + NVME_CQ_HEAD);\n    mutex_unlock(&dev->ring_lock);\n    return IRQ_HANDLED;\n}',
+      answers: ['mutex can sleep', 'sleep', 'cannot sleep in irq', 'sleeping in irq', 'scheduling', 'schedule'],
+      hint: 'mutex_lock may internally call schedule(). What is forbidden in interrupt/atomic context?',
+      xp: 130,
     },
     patch: {
-      title: 'CTF Patch: IRQ-Safe Lock',
-      question: 'Complete the lock/unlock pair for safe IRQ context locking.',
-      code: 'irq_handler(int irq, void *dev) {\n    unsigned long flags;\n    ___(&dev->lock, flags);\n    dev->tx_ring[head++] = pkt;\n    spin_unlock_irqrestore(&dev->lock, flags);\n}',
+      title: 'Patch: IRQ-Safe Locking [drivers/block/nvme]',
+      question: 'Replace the mutex with the correct IRQ-safe spinlock that saves and restores interrupt flags.',
+      code: '/* drivers/block/nvme-ring.c - PATCHED */\nstatic irqreturn_t nvme_irq_handler(\n    int irq, void *data)\n{\n    struct nvme_dev *dev = data;\n    unsigned long flags;\n    ___(&dev->ring_lock, flags);\n    dev->ring[dev->head++ % RING_SIZE] = readl(\n        dev->mmio + NVME_CQ_HEAD);\n    spin_unlock_irqrestore(\n        &dev->ring_lock, flags);\n    return IRQ_HANDLED;\n}',
       answers: ['spin_lock_irqsave'],
-      hint: 'The spinlock function that saves IRQ flags.',
-      xp: 350,
+      hint: 'The spinlock variant that takes a flags parameter and disables local interrupts.',
+      xp: 300,
       attempts: 2,
     },
-    concepts: ['spin_lock_irqsave', 'IRQ context', 'race condition'],
+    concepts: ['spin_lock_irqsave', 'Dirty COW', 'IRQ context', 'race condition'],
     maze: [
       '###########################',
       '#M.....#..................#',
@@ -877,46 +902,54 @@ const CTF_LEVELS = [
   },
 
   /* ===============================================
-     CTF 4: eBPF Verifier Exploit (Medium-Hard)
-     Difficulty: 4/5 - Multi-concept challenge
+     CTF 4: eBPF Privilege Escalation
+     Real-world: CVE-2021-3490
+     Difficulty: 4/5
      =============================================== */
   {
     id: 4,
-    title: 'CTF-04: eBPF Verifier Bypass',
-    incident: 'Malicious eBPF program bypassed the verifier and accessed kernel memory.',
-    trace: 'SECURITY: eBPF verifier rejected: invalid mem access (CVE-2021-31440)',
-    flag: 'flag{cap_bpf_v3r1f1er_g4te}',
-    timeLimit: 240,
+    title: 'CTF-04: eBPF Exploit [CVE-2021-3490]',
+    incident: 'eBPF ALU32 bounds tracking bypass leads to kernel memory read/write.',
+    trace: 'SECURITY: bpf_prog_load: verifier bypass detected (CVE-2021-3490)\nEACCES: R0 unbounded after ALU32 bitwise op',
+    flag: 'flag{ebpf_c4p_bpf_g4tek33per}',
+    timeLimit: 270,
     difficulty: 4,
     mentorText:
-      'This is a real-world scenario. An attacker crafted a BPF program that exploits ' +
-      'a bounds-tracking bug in the eBPF verifier (similar to CVE-2021-31440). ' +
-      'The verifier thought the register value was bounded, but at runtime it was not. ' +
-      'Your job: add the missing capability check AND add the bounds assertion. ' +
-      'Two separate fixes in a single patch.',
+      'Stage 4: Privilege Escalation. The attacker uses eBPF to gain root. ' +
+      'This is based on CVE-2021-3490 -- a critical bug in the eBPF verifier\'s ALU32 bounds tracking. ' +
+      'The eBPF verifier is supposed to be the ultimate gatekeeper: it statically analyzes every ' +
+      'instruction of a BPF program BEFORE it runs in the kernel. It checks for infinite loops, ' +
+      'invalid memory access, and stack overflow. But CVE-2021-3490 found a blind spot: after certain ' +
+      'ALU32 bitwise operations (AND, OR, XOR), the verifier lost track of register value bounds. ' +
+      'An attacker could craft a BPF program that the verifier THOUGHT was safe, ' +
+      'but at runtime could read and write arbitrary kernel memory. ' +
+      'Google Project Zero and ZDI rated this critical. Multiple exploit chains were published. ' +
+      'The defense in depth fix: ensure only privileged users (with CAP_BPF or CAP_SYS_ADMIN) ' +
+      'can load BPF programs at all. This is the capability gate that limits the attack surface.',
     lesson: [
-      'eBPF programs run in the kernel and must pass the verifier.',
-      'CAP_BPF capability is required to load BPF programs.',
-      'The verifier tracks value ranges to prevent OOB access.',
+      'CVE-2021-3490: eBPF verifier ALU32 bounds bypass (Critical).',
+      'The verifier does static analysis of every BPF instruction pre-load.',
+      'CAP_BPF (since Linux 5.8) limits who can load BPF programs.',
+      'Defense in depth: capability check + verifier + JIT hardening.',
     ],
     diagnosis: {
-      title: 'CTF Diagnosis: Verifier Gap',
-      question: 'What component checks eBPF programs for safety before they run in the kernel?',
-      code: 'bpf(BPF_PROG_LOAD, &attr, sizeof(attr));\n// EACCES: program rejected by ???',
-      answers: ['verifier', 'ebpf verifier', 'bpf verifier'],
-      hint: 'It does static analysis of every instruction before loading.',
-      xp: 150,
+      title: 'CVE Analysis: eBPF Verifier Bypass',
+      question: 'What kernel component performs static analysis on eBPF programs before allowing them to run?',
+      code: '/* kernel/bpf/syscall.c */\nstatic int bpf_prog_load(union bpf_attr *attr)\n{\n    struct bpf_prog *prog;\n    prog = bpf_prog_alloc(bpf_prog_size(\n        attr->insn_cnt), GFP_USER);\n    /* This component checks every insn */\n    err = bpf_check(&prog, attr, uattr);\n    if (err < 0)\n        goto free_prog;  /* REJECTED */\n    /* ... JIT compile and attach ... */\n}',
+      answers: ['verifier', 'ebpf verifier', 'bpf verifier', 'bpf_check'],
+      hint: 'It runs at load time doing static analysis. The function name bpf_check is a hint.',
+      xp: 160,
     },
     patch: {
-      title: 'CTF Patch: Capability + Bounds Check',
-      question: 'Complete the capability check function name.',
-      code: 'int bpf_check_prog(union bpf_attr *attr) {\n    if (!___(CAP_BPF))\n        return -EPERM;\n    if (!bpf_verifier_check(attr->insns, attr->insn_cnt))\n        return -EINVAL;\n    return bpf_prog_load(attr);\n}',
+      title: 'Patch: BPF Capability Gate [kernel/bpf/syscall.c]',
+      question: 'Complete the capability check that prevents unprivileged users from loading eBPF programs.',
+      code: '/* kernel/bpf/syscall.c - PATCHED */\nstatic int bpf_prog_load(\n    union bpf_attr *attr, bpfptr_t uattr)\n{\n    if (!___(CAP_BPF) &&\n        !capable(CAP_SYS_ADMIN))\n        return -EPERM;\n\n    if (attr->insn_cnt > BPF_MAXINSNS)\n        return -E2BIG;\n\n    return __bpf_prog_load(attr, uattr);\n}',
       answers: ['capable', 'ns_capable'],
-      hint: 'The kernel function that checks Linux capabilities.',
-      xp: 450,
+      hint: 'The kernel function that checks if the current task has a specific Linux capability (CAP_*).',
+      xp: 400,
       attempts: 2,
     },
-    concepts: ['eBPF verifier', 'CAP_BPF', 'bounds checking'],
+    concepts: ['eBPF verifier', 'CAP_BPF', 'ALU32 bounds', 'CVE-2021-3490'],
     maze: [
       '###########################',
       '#M........#...............#',
@@ -944,46 +977,56 @@ const CTF_LEVELS = [
   },
 
   /* ===============================================
-     CTF 5: Container Escape Full Chain (Hard)
-     Difficulty: 5/5 - Complete seccomp filter
+     CTF 5: Container Escape via cgroups
+     Real-world: CVE-2022-0492
+     Difficulty: 5/5
      =============================================== */
   {
     id: 5,
-    title: 'CTF-05: Container Escape',
-    incident: 'Namespace escape from unprivileged container via unshare() syscall.',
-    trace: 'SECURITY: unshare(CLONE_NEWUSER) from unprivileged container context',
-    flag: 'flag{s3cc0mp_c0nta1n3r_l0ck}',
+    title: 'CTF-05: Container Escape [CVE-2022-0492]',
+    incident: 'Container escape via cgroups release_agent allows host-level code execution.',
+    trace: 'SECURITY: cgroup_release_agent write from non-init namespace (CVE-2022-0492)\nALERT: unshare(CLONE_NEWUSER) from container PID 1',
+    flag: 'flag{s3ccomp_c0nta1ner_br34k0ut}',
     timeLimit: 300,
     difficulty: 5,
     mentorText:
-      'The final boss. An attacker inside a container calls unshare(CLONE_NEWUSER) to create a ' +
-      'new user namespace, gaining root-like capabilities to escape the container. ' +
-      'Your mission: write a seccomp-bpf filter that blocks the unshare syscall ' +
-      'while allowing all other syscalls to pass. This requires understanding both ' +
-      'BPF filter syntax and seccomp return values. Good luck, operator.',
+      'Final stage: Container Escape! The attacker breaks out to the host. ' +
+      'This is based on CVE-2022-0492 -- disclosed in February 2022. ' +
+      'The bug was elegant: cgroups v1 has a feature called release_agent that executes a binary ' +
+      'on the HOST when a cgroup becomes empty. An attacker inside a container could write to ' +
+      'the release_agent file and trigger code execution as root on the host system. ' +
+      'Docker, Kubernetes, LXC -- over 75% of cloud containers were vulnerable. ' +
+      'The first step of most container escape chains is calling unshare(CLONE_NEWUSER) to create ' +
+      'a new user namespace and gain fake root capabilities inside it. ' +
+      'Your mission: write a seccomp-BPF filter that blocks the unshare syscall. ' +
+      'Seccomp filters run in the kernel and intercept syscalls BEFORE they execute. ' +
+      'The BPF filter program loads the syscall number, compares it to __NR_unshare, ' +
+      'and returns SECCOMP_RET_KILL to block it. All other syscalls must pass through. ' +
+      'Complete the filter. This is what real-world container hardening looks like.',
     lesson: [
-      'Containers use namespaces + cgroups + seccomp for isolation.',
-      'unshare() with CLONE_NEWUSER can bypass container restrictions.',
-      'Seccomp-BPF filters can block dangerous syscalls at kernel level.',
+      'CVE-2022-0492: cgroups release_agent container escape.',
+      'unshare(CLONE_NEWUSER) is the first step in most container escapes.',
+      'Seccomp-BPF filters block syscalls at the kernel level.',
+      'SECCOMP_RET_KILL blocks, SECCOMP_RET_ALLOW permits syscalls.',
     ],
     diagnosis: {
-      title: 'CTF Diagnosis: Escape Vector',
-      question: 'What syscall does the attacker use to create a new user namespace from inside the container?',
-      code: '// Container process calls:\nsyscall(???, CLONE_NEWUSER);\n// Now has fake root caps inside new namespace',
+      title: 'CVE Analysis: Container Escape Entry Point',
+      question: 'What syscall does the attacker call to create a new user namespace and gain capabilities inside the container?',
+      code: '/* Attacker code inside container: */\n#define _GNU_SOURCE\n#include <sched.h>\n\nint main(void) {\n    /* Step 1: create new user namespace */\n    if (???(CLONE_NEWUSER) == -1)\n        perror("namespace");\n    /* Step 2: now have CAP_SYS_ADMIN in\n       new namespace, mount cgroup,\n       write release_agent, escape! */\n    return exploit_cgroup_release();\n}',
       answers: ['unshare', '__NR_unshare'],
-      hint: 'The syscall that detaches from existing namespaces.',
-      xp: 180,
+      hint: 'This syscall detaches the calling process from one or more namespaces. Starts with "un"...',
+      xp: 200,
     },
     patch: {
-      title: 'CTF Patch: Seccomp Filter',
-      question: 'Complete the seccomp return value that allows non-matching syscalls to continue normally.',
-      code: 'struct sock_filter filter[] = {\n    BPF_STMT(BPF_LD|BPF_W|BPF_ABS,\n        offsetof(struct seccomp_data, nr)),\n    BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K,\n        __NR_unshare, 0, 1),\n    BPF_STMT(BPF_RET|BPF_K, SECCOMP_RET_KILL),\n    BPF_STMT(BPF_RET|BPF_K, ___),\n};',
+      title: 'Patch: Seccomp-BPF Syscall Filter [container hardening]',
+      question: 'Complete the seccomp return value that allows all NON-blocked syscalls to execute normally.',
+      code: '/* Container seccomp policy - PATCHED */\nstruct sock_filter filter[] = {\n    /* Load syscall number */\n    BPF_STMT(BPF_LD | BPF_W | BPF_ABS,\n        offsetof(struct seccomp_data, nr)),\n    /* Jump if nr == __NR_unshare */\n    BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K,\n        __NR_unshare, 0, 1),\n    /* Block: kill process on unshare */\n    BPF_STMT(BPF_RET | BPF_K,\n        SECCOMP_RET_KILL),\n    /* Allow: permit all other syscalls */\n    BPF_STMT(BPF_RET | BPF_K, ___),\n};',
       answers: ['SECCOMP_RET_ALLOW'],
-      hint: 'The seccomp return value that permits the syscall.',
-      xp: 600,
+      hint: 'The seccomp return action that permits the syscall to proceed. Opposite of SECCOMP_RET_KILL.',
+      xp: 500,
       attempts: 2,
     },
-    concepts: ['seccomp-bpf', 'container escape', 'namespace isolation'],
+    concepts: ['seccomp-bpf', 'container escape', 'CVE-2022-0492', 'CLONE_NEWUSER'],
     maze: [
       '###########################',
       '#M........#...............#',

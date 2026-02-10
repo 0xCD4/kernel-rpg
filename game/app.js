@@ -1605,7 +1605,7 @@ ctfInstrStart.addEventListener('click', () => {
   ctfInstrOverlay.classList.add('hidden');
   state.gameMode = 'ctf';
   gameRoot.classList.remove('hidden');
-  gameSubtitle.textContent = 'capture the flag mode';
+  gameSubtitle.textContent = 'operation ring-zero // CTF mode';
   hudTimer.classList.remove('hidden');
   hudFlags.classList.remove('hidden');
   state.levelIndex = 0;
