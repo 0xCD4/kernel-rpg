@@ -1651,9 +1651,17 @@ modeTraining.addEventListener('click', () => {
   initLevel();
 });
 
+const ctfInstrOverlay = document.getElementById('ctf-instructions-overlay');
+const ctfInstrStart = document.getElementById('ctf-instr-start');
+
 modeCtf.addEventListener('click', () => {
-  state.gameMode = 'ctf';
   modeOverlay.classList.add('hidden');
+  ctfInstrOverlay.classList.remove('hidden');
+});
+
+ctfInstrStart.addEventListener('click', () => {
+  ctfInstrOverlay.classList.add('hidden');
+  state.gameMode = 'ctf';
   gameRoot.classList.remove('hidden');
   gameSubtitle.textContent = 'capture the flag mode';
   hudTimer.classList.remove('hidden');

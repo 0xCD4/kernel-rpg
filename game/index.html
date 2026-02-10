@@ -286,6 +286,61 @@
   </main>
 
   <!-- ===============================================
+       CTF INSTRUCTIONS OVERLAY
+       =============================================== -->
+  <div id="ctf-instructions-overlay" class="dialog-overlay hidden">
+    <div class="dialog-window ctf-instructions-window">
+      <div class="ctf-instr-header">
+        <span class="ctf-instr-icon">⚑</span>
+        <h3>How to Play CTF Mode</h3>
+      </div>
+      <div class="ctf-instr-body">
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num">1</span>
+          <div>
+            <strong>Read the Briefing</strong>
+            <p>Walk to the <span class="ctf-hl mentor">Mentor (M)</span> and press <kbd>E</kbd> to get the mission briefing.</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num">2</span>
+          <div>
+            <strong>Solve the Challenge</strong>
+            <p>Go to the <span class="ctf-hl diag">Challenge Terminal (D)</span> and answer the security question.</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num">3</span>
+          <div>
+            <strong>Capture the Flag</strong>
+            <p>Find the hidden <span class="ctf-hl flag">Flag (F)</span> in the maze. Walk over it and press <kbd>E</kbd>.</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num">4</span>
+          <div>
+            <strong>Decode the Flag</strong>
+            <p>Go to the <span class="ctf-hl decode">Decrypt Terminal (X)</span> and solve the decode challenge to open the gate.</p>
+          </div>
+        </div>
+        <div class="ctf-instr-step">
+          <span class="ctf-instr-num">5</span>
+          <div>
+            <strong>Escape!</strong>
+            <p>Walk to the <span class="ctf-hl gate">Gate (G)</span> and exit before time runs out. Dodge the kernel bugs!</p>
+          </div>
+        </div>
+      </div>
+      <div class="ctf-instr-controls">
+        <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move &nbsp; <kbd>E</kbd> Interact &nbsp; <kbd>H</kbd> Hint &nbsp; <kbd>R</kbd> Reset</p>
+      </div>
+      <div class="dialog-actions lc-actions">
+        <button id="ctf-instr-start" type="button" class="btn-primary">Start CTF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===============================================
        CTF FLAG CAPTURE OVERLAY
        =============================================== -->
   <div id="flag-overlay" class="dialog-overlay hidden">
