@@ -635,7 +635,15 @@ function spawnEnemies() {
     if (attempts < 800) {
       const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
       const dir = dirs[Math.floor(Math.random() * dirs.length)];
-      enemies.push({ x: ex, y: ey, dx: dir[0], dy: dir[1], phase: Math.random() * Math.PI * 2 });
+      enemies.push({
+        x: ex,
+        y: ey,
+        prevX: ex,
+        prevY: ey,
+        dx: dir[0],
+        dy: dir[1],
+        phase: Math.random() * Math.PI * 2,
+      });
     }
   }
 
@@ -652,6 +660,8 @@ function moveEnemies() {
 
   state.enemies.forEach(enemy => {
     enemy.phase += 0.3;
+    enemy.prevX = enemy.x;
+    enemy.prevY = enemy.y;
 
     const nx = enemy.x + enemy.dx;
     const ny = enemy.y + enemy.dy;
@@ -691,10 +701,19 @@ function pickNewDirection(enemy) {
   }
 }
 
-function checkEnemyCollision() {
+function checkEnemyCollision(playerPrevPos = state.player) {
   if (state.invulnerable) return;
 
-  const hit = state.enemies.some(e => e.x === state.player.x && e.y === state.player.y);
+  const hit = state.enemies.some((enemy) => {
+    const sameTileHit = enemy.x === state.player.x && enemy.y === state.player.y;
+    const swappedTileHit =
+      enemy.x === playerPrevPos.x &&
+      enemy.y === playerPrevPos.y &&
+      enemy.prevX === state.player.x &&
+      enemy.prevY === state.player.y;
+
+    return sameTileHit || swappedTileHit;
+  });
   if (hit) {
     playSfx('panic');
     triggerBugPanic();
@@ -1183,7 +1202,7 @@ function move(dx, dy) {
   state.player.y = ny;
 
   // Immediate collision check (if walking towards an enemy)
-  checkEnemyCollision();
+  checkEnemyCollision({ x: startX, y: startY });
   if (!panicOverlay.classList.contains('hidden')) return; // No animation needed if panic screen is open
 
   state.animating = true;
@@ -1206,7 +1225,7 @@ function move(dx, dy) {
       state.animating = false;
       state.animX = nx;
       state.animY = ny;
-      checkEnemyCollision();
+      checkEnemyCollision({ x: startX, y: startY });
       draw();
     }
   }
