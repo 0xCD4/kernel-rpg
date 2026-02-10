@@ -671,11 +671,317 @@ const LEVELS = [
   },
 ];
 
+/* ═══════════════════════════════════════════════
+   CTF MODE - CAPTURE THE FLAG LEVELS
+   ═══════════════════════════════════════════════ */
+
+const CTF_TILE = {
+  ...TILE,
+  FLAG: 9,
+  DECRYPT: 10,
+  FIREWALL: 11,
+};
+
+const CTF_CHAR_TO_TILE = {
+  ...CHAR_TO_TILE,
+  F: CTF_TILE.FLAG,
+  X: CTF_TILE.DECRYPT,
+  W: CTF_TILE.FIREWALL,
+};
+
+const CTF_LEVELS = [
+  /* ===============================================
+     CTF 1: Memory Forensics
+     =============================================== */
+  {
+    id: 1,
+    title: 'CTF-01: Memory Forensics',
+    briefing: 'A compromised server has been captured for analysis. Extract the flag hidden in the memory dump. The attacker left traces in the kernel heap.',
+    flag: 'flag{kmalloc_slab_f0r3ns1cs}',
+    timeLimit: 180,
+    hints: [
+      'The SLAB allocator leaves patterns in freed objects.',
+      'Use volatility or crash to inspect kmem_cache structures.',
+      'The flag is encoded in the freed slab object metadata.',
+    ],
+    challenge: {
+      title: 'FORENSICS TERMINAL',
+      question: 'Analyze the memory dump. What tool is used to examine Linux kernel memory structures offline?',
+      code: 'file memdump.raw\n# ELF 64-bit LSB core file\n# -> kernel crash dump format\n\n??? -f memdump.raw linux_pslist',
+      answers: ['volatility', 'vol', 'vol.py', 'volatility3'],
+      hint: 'The Python-based memory forensics framework.',
+      xp: 200,
+    },
+    decode: {
+      title: 'DECODE TERMINAL',
+      question: 'The flag is XOR-encoded in the slab cache. What is the typical XOR key size used in simple kernel rootkit obfuscation?',
+      code: 'struct hidden_data {\n    char flag[32];\n    uint8_t xor_key;\n};\n// key = 0x??  (single byte)',
+      answers: ['1 byte', '1', 'single byte', '8 bit', '8 bits'],
+      hint: 'Simple XOR uses a single byte key (0x00-0xFF).',
+      xp: 300,
+    },
+    concepts: ['memory forensics', 'SLAB cache', 'volatility framework'],
+    maze: [
+      '###########################',
+      '#M......#.....#...........#',
+      '#.......#.....#...........#',
+      '#..###..#..##.#...####....#',
+      '#..#.......#......#.......#',
+      '#..#.......#......#.......#',
+      '#..####........##.#..###..#',
+      '#..........X..............#',
+      '#..........#..............#',
+      '#..####....#...####..####.#',
+      '#..#.......#.......#......#',
+      '#..#..K....#.......#......#',
+      '#..#.......#..####.#..###.#',
+      '#..####....#..#........D..#',
+      '#..........#..#...........#',
+      '#..###..####..#..####..##.#',
+      '#..........#.....#........#',
+      '#..........#.....#..G.....#',
+      '#..####....#..####........#',
+      '#..........F...#.......B..#',
+      '#..............#......E...#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 2: Kernel Exploit Analysis
+     =============================================== */
+  {
+    id: 2,
+    title: 'CTF-02: Kernel Exploit Dev',
+    briefing: 'A zero-day kernel exploit was found in the wild. Reverse engineer the exploit payload and find the flag hidden in the shellcode.',
+    flag: 'flag{r0p_cha1n_k3rn3l_pwn}',
+    timeLimit: 210,
+    hints: [
+      'The exploit uses Return-Oriented Programming (ROP).',
+      'Check the gadget chain for the commit_creds(prepare_kernel_cred(0)) pattern.',
+      'The flag is assembled from ROP gadget addresses.',
+    ],
+    challenge: {
+      title: 'EXPLOIT ANALYSIS TERMINAL',
+      question: 'What kernel function is called to escalate privileges to root in a typical kernel exploit?',
+      code: 'void *cred = prepare_kernel_cred(0);\n???(cred);\n// uid=0(root) gid=0(root)',
+      answers: ['commit_creds'],
+      hint: 'The function that applies a new credential set to the current task.',
+      xp: 250,
+    },
+    decode: {
+      title: 'SHELLCODE TERMINAL',
+      question: 'In a ROP chain, what structure holds the saved return addresses on the kernel stack?',
+      code: '// Stack layout:\n// [rbp+0x00] saved_rbp\n// [rbp+0x08] return_addr  <-- gadget 1\n// [rbp+0x10] return_addr  <-- gadget 2\n// This structure is called the ???',
+      answers: ['stack frame', 'call stack', 'stack'],
+      hint: 'The data structure that stores function return addresses.',
+      xp: 350,
+    },
+    concepts: ['ROP chains', 'commit_creds', 'kernel stack exploitation'],
+    maze: [
+      '###########################',
+      '#M.........#..............#',
+      '#..........#..............#',
+      '#..####....#....####......#',
+      '#.....#....#....#.........#',
+      '#.....#.........#.........#',
+      '####..#..####...#...#####.#',
+      '#.........#..X..#.........#',
+      '#.........#.....#.........#',
+      '#..####...#.....####..###.#',
+      '#..#......#..........#....#',
+      '#..#......#....K.....#....#',
+      '#..#...####..........#....#',
+      '#..#......#...####...#....#',
+      '#.........#...#....D......#',
+      '#..####...#...#...........#',
+      '#..#..........#...........#',
+      '#..#..........#...####....#',
+      '#..####..####.#......#....#',
+      '#............G#..F...#....#',
+      '#.............#...B..#..E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 3: Rootkit Detection
+     =============================================== */
+  {
+    id: 3,
+    title: 'CTF-03: Rootkit Hunter',
+    briefing: 'Intelligence reports a kernel rootkit on the target server. Find the hidden kernel module, analyze its hooks, and extract the flag from its encrypted config.',
+    flag: 'flag{ftrac3_h00k_d3t3ct0r}',
+    timeLimit: 240,
+    hints: [
+      'Hidden modules are removed from the module list but still in memory.',
+      'Check /sys/module/ vs lsmod output for discrepancies.',
+      'The rootkit config is stored in a proc entry with a random name.',
+    ],
+    challenge: {
+      title: 'ROOTKIT DETECTION TERMINAL',
+      question: 'What /proc file shows all currently loaded kernel modules?',
+      code: 'cat /proc/???\n# Lists all loaded kernel modules\n# Compare with lsmod output for hidden modules',
+      answers: ['modules', '/proc/modules'],
+      hint: 'The proc file that lists every loaded module.',
+      xp: 220,
+    },
+    decode: {
+      title: 'MODULE ANALYSIS TERMINAL',
+      question: 'What is the kernel function that hides a module from the module list?',
+      code: 'static int __init rootkit_init(void) {\n    // Hide this module\n    ???(&THIS_MODULE->list);\n    return 0;\n}',
+      answers: ['list_del', 'list_del_init'],
+      hint: 'The linked-list function that removes a node from a doubly-linked list.',
+      xp: 380,
+    },
+    concepts: ['hidden kernel modules', '/proc/modules', 'list manipulation'],
+    maze: [
+      '###########################',
+      '#M.....#..................#',
+      '#......#..................#',
+      '#......#...####..####.....#',
+      '#..#####...#........#.....#',
+      '#..........#........#.....#',
+      '#..........#...####.#..##.#',
+      '#..####....#.......X#.....#',
+      '#..#.......#.........#....#',
+      '#..#....####..####...#....#',
+      '#..#.......#..#......#....#',
+      '#..........#..#..K...#....#',
+      '#..####....#..#......#....#',
+      '#..........#..####...#....#',
+      '#..........#........D.....#',
+      '#..####..###...####.......#',
+      '#..#.......#...#..........#',
+      '#..#.......#...#..........#',
+      '#..#.......#...####...###.#',
+      '#..........#.......F.G....#',
+      '#..........#......B..#..E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 4: Network Stack Capture
+     =============================================== */
+  {
+    id: 4,
+    title: 'CTF-04: Packet Capture',
+    briefing: 'A covert channel was detected in the kernel network stack. The attacker is exfiltrating data through ICMP echo packets. Capture and decode the flag from the packet payloads.',
+    flag: 'flag{1cmp_c0v3rt_ch4nn3l}',
+    timeLimit: 200,
+    hints: [
+      'ICMP echo request payloads can carry hidden data.',
+      'The netfilter hook at NF_INET_PRE_ROUTING captures all incoming packets.',
+      'Each ICMP packet payload contains one character of the flag.',
+    ],
+    challenge: {
+      title: 'PACKET CAPTURE TERMINAL',
+      question: 'What netfilter hook point catches packets before routing decisions?',
+      code: 'static struct nf_hook_ops nfho = {\n    .hook     = capture_func,\n    .pf       = PF_INET,\n    .hooknum  = ???,\n    .priority = NF_IP_PRI_FIRST,\n};',
+      answers: ['NF_INET_PRE_ROUTING', 'PRE_ROUTING'],
+      hint: 'The first hook point in the netfilter chain.',
+      xp: 280,
+    },
+    decode: {
+      title: 'DECODE CHANNEL TERMINAL',
+      question: 'What is the ICMP type number for echo request (ping)?',
+      code: 'struct icmphdr *icmp = icmp_hdr(skb);\nif (icmp->type == ???) {\n    // Extract hidden data from payload\n    extract_covert_data(skb);\n}',
+      answers: ['8', 'ICMP_ECHO', '0x08'],
+      hint: 'The type field value for a ping request packet.',
+      xp: 320,
+    },
+    concepts: ['netfilter hooks', 'ICMP covert channels', 'packet inspection'],
+    maze: [
+      '###########################',
+      '#M........#...............#',
+      '#.........#...............#',
+      '#..####...#...####..###...#',
+      '#..#..........#...........#',
+      '#..#..........#...........#',
+      '#..#...####...#..####.....#',
+      '#......#..X...#..#........#',
+      '#......#......#..#........#',
+      '#..#####......#..#..####..#',
+      '#.........#...#...........#',
+      '#.........#...#...........#',
+      '#..####...#...#..####.....#',
+      '#..#......#......#..K.....#',
+      '#..#......#......#....D...#',
+      '#..#...####...####..####..#',
+      '#..........#..........F...#',
+      '#..........#..............#',
+      '#..####....#....####......#',
+      '#..........#........G.....#',
+      '#..........#....B....#..E.#',
+      '###########################',
+    ],
+  },
+
+  /* ===============================================
+     CTF 5: Privilege Escalation Chain
+     =============================================== */
+  {
+    id: 5,
+    title: 'CTF-05: Privesc Chain',
+    briefing: 'The final challenge. Chain multiple kernel vulnerabilities together: a race condition, a UAF bug, and a namespace escape. Capture the root flag from the host namespace.',
+    flag: 'flag{full_k3rn3l_ch41n_r00t}',
+    timeLimit: 300,
+    hints: [
+      'Step 1: Win the race condition to corrupt the refcount.',
+      'Step 2: Trigger UAF to overwrite cred structure.',
+      'Step 3: Escape the namespace using the forged credentials.',
+    ],
+    challenge: {
+      title: 'EXPLOIT CHAIN TERMINAL',
+      question: 'In the Linux kernel, what structure holds the security credentials (uid, gid, capabilities) of a process?',
+      code: 'struct task_struct {\n    ...\n    const struct ??? *cred;\n    ...\n};',
+      answers: ['cred', 'cred_struct'],
+      hint: 'The structure name that is also the field name in task_struct.',
+      xp: 350,
+    },
+    decode: {
+      title: 'ROOT CAPTURE TERMINAL',
+      question: 'After overwriting the cred structure, what uid value gives you root access?',
+      code: 'struct cred *new = prepare_kernel_cred(NULL);\nnew->uid = KUIDT_INIT(???);\nnew->gid = KGIDT_INIT(???);\ncommit_creds(new);',
+      answers: ['0'],
+      hint: 'The numeric user ID of the root user on Linux.',
+      xp: 500,
+    },
+    concepts: ['race condition', 'cred structure', 'full exploit chain'],
+    maze: [
+      '###########################',
+      '#M........#...............#',
+      '#.........#...............#',
+      '#..####...#....####.......#',
+      '#..#..........#...........#',
+      '#..#..........#...........#',
+      '#..#...####...#...####....#',
+      '#......#..X...#...#.......#',
+      '#......#......#...#.......#',
+      '#..#####......#...#..###..#',
+      '#.........#...#...........#',
+      '#.........#...#....K......#',
+      '#..####...#...#...........#',
+      '#..#......#......####..D..#',
+      '#..#......#......#........#',
+      '#..#...####...####..####..#',
+      '#..........#..............#',
+      '#..........#..........F...#',
+      '#..####....#....####......#',
+      '#..........#........G.....#',
+      '#..........#....B....#..E.#',
+      '###########################',
+    ],
+  },
+];
+
 function buildLevelMap(level) {
   const points = {};
+  const charMap = level.decode ? CTF_CHAR_TO_TILE : CHAR_TO_TILE;
   const rows = level.maze.map((row, y) =>
     row.split('').map((char, x) => {
-      const tile = CHAR_TO_TILE[char] ?? TILE.FLOOR;
+      const tile = charMap[char] ?? TILE.FLOOR;
       if (char === 'M') points.mentor = { x, y };
       if (char === 'D') points.diag = { x, y };
       if (char === 'P') points.patch = { x, y };
@@ -683,6 +989,9 @@ function buildLevelMap(level) {
       if (char === 'G') points.gate = { x, y };
       if (char === 'E') points.exit = { x, y };
       if (char === 'B') points.bonus = { x, y };
+      if (char === 'F') points.flag = { x, y };
+      if (char === 'X') points.decrypt = { x, y };
+      if (char === 'W') points.firewall = { x, y };
       return tile;
     })
   );
